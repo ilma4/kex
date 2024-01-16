@@ -77,7 +77,7 @@ class ConcolicKexTool : Tool {
 
     override fun initialize(src: File, bin: File, classPath: List<File>) {
         val containerPaths: List<Path> = classPath.map { it.toPath().toAbsolutePath() }.let {
-            val mockitoPath = getMockito()?.path ?: return@let it
+            val mockitoPath = getMockito()?.path?.toAbsolutePath() ?: return@let it
             it.toMutableList().apply { add(mockitoPath) }.toList()
         }
         containerClassLoader =
