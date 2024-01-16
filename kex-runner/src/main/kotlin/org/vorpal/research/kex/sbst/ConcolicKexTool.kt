@@ -25,6 +25,7 @@ import org.vorpal.research.kfg.visitor.executePipeline
 import org.vorpal.research.kthelper.logging.log
 import java.io.File
 import java.net.URLClassLoader
+import java.nio.file.Path
 import kotlin.time.ExperimentalTime
 
 @ExperimentalTime
@@ -75,10 +76,15 @@ class ConcolicKexTool : Tool {
 
 
     override fun initialize(src: File, bin: File, classPath: List<File>) {
-        val containerPaths = classPath.map { it.toPath().toAbsolutePath() }
-        containerClassLoader = URLClassLoader(containerPaths.map { it.toUri().toURL() }.toTypedArray())
+        val containerPaths: List<Path> = classPath.map { it.toPath().toAbsolutePath() }.let {
+            val mockitoPath = getMockito()?.path ?: return@let it
+            it.toMutableList().apply { add(mockitoPath) }.toList()
+        }
+        containerClassLoader =
+            URLClassLoader(containerPaths.map { it.toUri().toURL() }.toTypedArray())
         containers = listOfNotNull(*containerPaths.map {
-            it.asContainer() ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
+            it.asContainer()
+                ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
         }.toTypedArray(), getKexRuntime())
         val analysisJars = listOfNotNull(*containers.toTypedArray(), getRuntime(), getIntrinsics())
 
@@ -99,7 +105,8 @@ class ConcolicKexTool : Tool {
         log.debug("Access level: {}", accessLevel)
 
         val randomDriver = EasyRandomDriver()
-        context = ExecutionContext(cm, containerClassLoader, randomDriver, containerPaths, accessLevel)
+        context =
+            ExecutionContext(cm, containerClassLoader, randomDriver, containerPaths, accessLevel)
 
         log.debug("Running with class path:\n${containers.joinToString("\n") { it.name }}")
     }
