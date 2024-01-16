@@ -2,43 +2,12 @@ package org.vorpal.research.kex.reanimator.codegen.javagen
 
 import org.vorpal.research.kex.ExecutionContext
 import org.vorpal.research.kex.config.kexConfig
-import org.vorpal.research.kex.ktype.KexBool
-import org.vorpal.research.kex.ktype.KexByte
-import org.vorpal.research.kex.ktype.KexChar
-import org.vorpal.research.kex.ktype.KexDouble
-import org.vorpal.research.kex.ktype.KexFloat
-import org.vorpal.research.kex.ktype.KexInt
-import org.vorpal.research.kex.ktype.KexLong
-import org.vorpal.research.kex.ktype.KexShort
-import org.vorpal.research.kex.ktype.KexType
-import org.vorpal.research.kex.ktype.kexType
+import org.vorpal.research.kex.ktype.*
 import org.vorpal.research.kex.parameters.Parameters
-import org.vorpal.research.kex.reanimator.actionsequence.ActionList
-import org.vorpal.research.kex.reanimator.actionsequence.ActionSequence
-import org.vorpal.research.kex.reanimator.actionsequence.ConstructorCall
-import org.vorpal.research.kex.reanimator.actionsequence.DefaultConstructorCall
-import org.vorpal.research.kex.reanimator.actionsequence.EnumValueCreation
-import org.vorpal.research.kex.reanimator.actionsequence.ExternalConstructorCall
-import org.vorpal.research.kex.reanimator.actionsequence.ExternalMethodCall
-import org.vorpal.research.kex.reanimator.actionsequence.InnerClassConstructorCall
-import org.vorpal.research.kex.reanimator.actionsequence.MethodCall
-import org.vorpal.research.kex.reanimator.actionsequence.NewArray
-import org.vorpal.research.kex.reanimator.actionsequence.PrimaryValue
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionArrayWrite
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionList
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionNewArray
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionNewInstance
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionSetField
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionSetStaticField
-import org.vorpal.research.kex.reanimator.actionsequence.StaticFieldGetter
-import org.vorpal.research.kex.reanimator.actionsequence.StringValue
-import org.vorpal.research.kex.reanimator.actionsequence.UnknownSequence
-import org.vorpal.research.kfg.type.ArrayType
-import org.vorpal.research.kfg.type.ClassType
-import org.vorpal.research.kfg.type.PrimitiveType
-import org.vorpal.research.kfg.type.Type
-import org.vorpal.research.kfg.type.objectType
+import org.vorpal.research.kex.reanimator.actionsequence.*
+import org.vorpal.research.kfg.type.*
 import org.vorpal.research.kthelper.assert.unreachable
+import org.vorpal.research.kthelper.logging.error
 import org.vorpal.research.kthelper.logging.log
 import org.vorpal.research.kthelper.runIf
 import kotlin.time.Duration.Companion.seconds
@@ -54,6 +23,7 @@ class ExecutorAS2JavaPrinter(
     private val testTimeout = kexConfig.getIntValue("testGen", "testTimeout", 10).seconds
     private val testParams = mutableListOf<JavaBuilder.JavaClass.JavaField>()
     private val reflectionUtils = ReflectionUtilsPrinter.reflectionUtils(packageName)
+    private val mockUtils = MockUtilsPrinter.mockUtils(packageName)
     private val printedDeclarations = hashSetOf<String>()
     private val printedInsides = hashSetOf<String>()
 
@@ -94,6 +64,7 @@ class ExecutorAS2JavaPrinter(
             import("java.lang.reflect.Constructor")
             import("java.lang.reflect.Field")
             import("java.lang.reflect.Array")
+            import("org.mockito.Mockito") // TODO. Mock: make configurable
             importStatic("${reflectionUtils.klass.pkg}.${reflectionUtils.klass.name}.*")
 
             with(klass) {
@@ -128,6 +99,13 @@ class ExecutorAS2JavaPrinter(
                                     else -> null
                                 }
                             } ?: unreachable { log.error("Unexpected call in arg") }
+
+                            is MockSequence -> arg.mockCalls.firstNotNullOfOrNull {
+                                when (it) {
+                                    is MockNewInstance -> it.klass.asType
+                                    else -> null
+                                }
+                            } ?: unreachable { log.error { "Unexpected call in arg" } }
 
                             is PrimaryValue<*> -> return@forEach
                             is StringValue -> return@forEach
@@ -276,58 +254,126 @@ class ExecutorAS2JavaPrinter(
         return res
     }
 
-    private fun printDeclarations(
-        owner: ActionSequence,
-        result: MutableList<String>
-    ) {
-        if (owner is ReflectionList) {
-            if (owner.name in printedDeclarations) return
-            printedDeclarations += owner.name
+    override fun printMockSequence(mockSequence: MockSequence): List<String> {
+        val res = mutableListOf<String>()
+        printDeclarations(mockSequence, res)
+        printInsides(mockSequence, res)
+        return res
+    }
 
-            for (api in owner) {
-                when (api) {
-                    is ReflectionNewInstance -> result += printReflectionNewInstance(owner, api)
-                    is ReflectionNewArray -> result += printReflectionNewArray(owner, api)
-                    is ReflectionSetField -> printDeclarations(api.value, result)
-                    is ReflectionSetStaticField -> printDeclarations(api.value, result)
-                    is ReflectionArrayWrite -> printDeclarations(api.value, result)
-                }
+    private fun printDeclarations(owner: ActionSequence, result: MutableList<String>) {
+        when (owner) {
+            is ReflectionList -> printReflectionListDeclarations(owner, result)
+            is MockSequence -> printMockSequenceDeclarations(owner, result)
+            else -> {
+                owner.printAsJava()
             }
-        } else {
+        }
+    }
+
+    private fun printMockSequenceDeclarations(owner: MockSequence, result: MutableList<String>) {
+        if (owner.name in printedDeclarations) return
+        printedDeclarations += owner.name
+
+        for (mockCall in owner.mockCalls) {
+            when (mockCall) {
+                is MockNewInstance -> result += printMockNewInstance(owner, mockCall)
+                is MockSetupMethod -> mockCall.returnValues.forEach { printDeclarations(it, result) }
+            }
+        }
+        for (reflectionCall in owner.reflectionCalls) {
+            printReflectionCallDeclarations(reflectionCall, result, owner)
+        }
+    }
+
+    private fun printReflectionListDeclarations(owner: ReflectionList, result: MutableList<String>) {
+        if (owner.name in printedDeclarations) return
+        printedDeclarations += owner.name
+
+        for (api in owner) {
+            printReflectionCallDeclarations(api, result, owner)
+        }
+    }
+
+    private fun printReflectionCallDeclarations(
+        api: ReflectionCall,
+        result: MutableList<String>,
+        owner: ActionSequence
+    ) {
+        when (api) {
+            is ReflectionNewInstance -> result += printReflectionNewInstance(owner, api)
+            is ReflectionNewArray -> result += printReflectionNewArray(owner, api)
+            is ReflectionSetField -> printDeclarations(api.value, result)
+            is ReflectionSetStaticField -> printDeclarations(api.value, result)
+            is ReflectionArrayWrite -> printDeclarations(api.value, result)
+        }
+    }
+
+
+    private fun printInsides(owner: ActionSequence, result: MutableList<String>): Unit = when (owner) {
+        is ReflectionList -> printReflectionListInsides(owner, result)
+        is MockSequence -> printMockSequenceInsides(owner, result)
+        else -> {
             owner.printAsJava()
         }
     }
 
-    private fun printInsides(
-        owner: ActionSequence,
+    private fun printMockSequenceInsides(
+        owner: MockSequence,
         result: MutableList<String>
     ) {
-        if (owner is ReflectionList) {
-            if (owner.name in printedInsides) return
-            printedInsides += owner.name
+        if (owner.name in printedInsides) return
+        printedInsides += owner.name
 
-            for (api in owner) {
-                when (api) {
-                    is ReflectionSetField -> {
-                        printInsides(api.value, result)
-                        result += printReflectionSetField(owner, api)
-                    }
-
-                    is ReflectionSetStaticField -> {
-                        printInsides(api.value, result)
-                        result += printReflectionSetStaticField(owner, api)
-                    }
-
-                    is ReflectionArrayWrite -> {
-                        printInsides(api.value, result)
-                        result += printReflectionArrayWrite(owner, api)
-                    }
-
-                    else -> {}
+        for (mockCall in owner.mockCalls) {
+            when (mockCall) {
+                is MockSetupMethod -> {
+                    mockCall.returnValues.forEach { printInsides(it, result) }
+                    result += printMockSetupMethod(owner, mockCall)
                 }
+
+                is MockNewInstance -> {}
             }
-        } else {
-            owner.printAsJava()
+        }
+        for (reflectionCall in owner.reflectionCalls) {
+            printReflectionCallInsides(reflectionCall, result, owner)
+        }
+    }
+
+    private fun printReflectionListInsides(
+        owner: ReflectionList,
+        result: MutableList<String>
+    ) {
+        if (owner.name in printedInsides) return
+        printedInsides += owner.name
+
+        for (api in owner) {
+            printReflectionCallInsides(api, result, owner)
+        }
+    }
+
+    private fun printReflectionCallInsides(
+        api: ReflectionCall,
+        result: MutableList<String>,
+        owner: ActionSequence
+    ) {
+        when (api) {
+            is ReflectionSetField -> {
+                printInsides(api.value, result)
+                result += printReflectionSetField(owner, api)
+            }
+
+            is ReflectionSetStaticField -> {
+                printInsides(api.value, result)
+                result += printReflectionSetStaticField(owner, api)
+            }
+
+            is ReflectionArrayWrite -> {
+                printInsides(api.value, result)
+                result += printReflectionArrayWrite(owner, api)
+            }
+
+            else -> {}
         }
     }
 
@@ -427,5 +473,66 @@ class ExecutorAS2JavaPrinter(
         val setElementMethod = elementType.kexType.primitiveName?.let { reflectionUtils.setPrimitiveElementMap[it]!! }
             ?: reflectionUtils.setElement
         return listOf("${setElementMethod.name}(${owner.name}, ${call.index.stackName}, ${call.value.stackName})")
+    }
+
+    override fun printMockNewInstance(owner: ActionSequence, call: MockNewInstance): List<String> {
+        val actualType = ASClass(ctx.types.objectType)
+        val kfgClass = call.klass
+        return listOf(
+            if (resolvedTypes[owner] != null) {
+                val rest = resolvedTypes[owner]!!
+                val type = actualType.merge(rest)
+                actualTypes[owner] = type
+                "${
+                    printVarDeclaration(
+                        owner.name,
+                        type
+                    )
+                } = Mockito.mock(Class.forName(\"${kfgClass.canonicalDesc}\"))"
+            } else {
+                actualTypes[owner] = actualType
+                "${
+                    printVarDeclaration(
+                        owner.name,
+                        actualType
+                    )
+                } = Mockito.mock(Class.forName(\"${kfgClass.canonicalDesc}\"))"
+            }
+        )
+    }
+
+    private fun mockitoAnyFromType(type: Type): String = "Mockito." + when (type) {
+        is PrimitiveType -> when (type) {
+            is IntType -> "anyInt()"
+            is BoolType -> "anyBoolean()"
+            is ByteType -> "anyByte()"
+            is CharType -> "anyChar()"
+            is LongType -> "anyLong()"
+            is ShortType -> "anyShort()"
+            is DoubleType -> "anyDouble()"
+            is FloatType -> "anyFloat()"
+        }
+
+        else -> "any()"
+    }
+
+
+    override fun printMockSetupMethod(owner: ActionSequence, call: MockSetupMethod): List<String> {
+        if (call.returnValues.isEmpty()) {
+            return emptyList()
+        }
+        call.returnValues.forEach { it.printAsJava() }
+
+        val returnValues = call.returnValues
+            .map { value -> value.cast(call.method.returnType.asType) }
+            .joinToString(", ") {
+                it
+            }
+        val method = call.method
+        val anys = call.method.argTypes.joinToString(", ") { type -> mockitoAnyFromType(type) }
+
+        val type = call.method.klass.asType.asType
+        // TODO: Mock. Call method using ReflectionUtils, so it can mock package-private methods
+        return listOf("Mockito.when((${owner.cast(type)}).${method.name}($anys)).thenReturn(${returnValues})")
     }
 }

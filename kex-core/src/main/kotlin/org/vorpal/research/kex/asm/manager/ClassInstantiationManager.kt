@@ -3,11 +3,13 @@ package org.vorpal.research.kex.asm.manager
 import org.vorpal.research.kex.ExecutionContext
 import org.vorpal.research.kex.asm.util.AccessModifier
 import org.vorpal.research.kex.asm.util.accessModifier
+import org.vorpal.research.kex.config.kexConfig
 import org.vorpal.research.kex.ktype.KexClass
 import org.vorpal.research.kex.ktype.KexReference
 import org.vorpal.research.kex.ktype.KexRtManager.rtMapped
 import org.vorpal.research.kex.ktype.KexType
 import org.vorpal.research.kex.ktype.kexType
+import org.vorpal.research.kex.util.KfgTargetFilter
 import org.vorpal.research.kex.util.isSubtypeOfCached
 import org.vorpal.research.kfg.ClassManager
 import org.vorpal.research.kfg.ir.Class
@@ -24,7 +26,7 @@ import kotlin.random.Random
 
 val instantiationManager: ClassInstantiationManager get() = StringClassInstantiationManagerImpl
 
-class NoConcreteInstanceException(val klass: Class) : Exception()
+class NoConcreteInstanceException(val klass: Class) : Exception("No concrete instance for $klass")
 
 interface ClassInstantiationManager {
     fun isDirectlyInstantiable(klass: Class, accessLevel: AccessModifier): Boolean
@@ -37,6 +39,18 @@ interface ClassInstantiationManager {
             is ClassType -> get(type.klass, accessLevel, excludes, random).asType
             is ArrayType -> get(type.component, accessLevel, excludes, random).asArray
             else -> type
+        }
+
+    fun getAll(type: Type, accessLevel: AccessModifier, excludes: Set<Class>): Set<Type> =
+        when (type) {
+            is ClassType -> getAllConcreteSubtypes(type.klass, accessLevel)
+                .filter { it !in excludes }
+                .mapTo(mutableSetOf()) { it.asType }
+
+            is ArrayType -> getAll(type.component, accessLevel, excludes)
+                .mapTo(mutableSetOf()) { it.asArray }
+
+            else -> setOf(type)
         }
 
     fun getAllConcreteSubtypes(klass: Class, accessLevel: AccessModifier): Set<Class>
@@ -275,6 +289,15 @@ private object StringClassInstantiationManagerImpl : ClassInstantiationManager {
     }
 }
 
+
+private val ignoredInstantiations: Set<KfgTargetFilter> by lazy {
+    kexConfig.getMultipleStringValue("testGen", "ignoreInstantiation").flatMapTo(mutableSetOf()) {
+        val filter = KfgTargetFilter.parse(it)
+        listOf(filter, filter.rtMapped)
+    }
+}
+
+
 class ClassInstantiationDetector(
     private val ctx: ExecutionContext,
     private val baseAccessLevel: AccessModifier = AccessModifier.Private
@@ -284,6 +307,10 @@ class ClassInstantiationDetector(
     override fun cleanup() {}
 
     override fun visit(klass: Class) {
+        if (ignoredInstantiations.any { it.matches(klass.asType.kexType.toString()) }) {
+            return
+        }
+
         if (StringClassInstantiationManagerImpl.isDirectlyInstantiable(klass, baseAccessLevel))
             addInstantiableClass(klass, klass)
         super.visit(klass)

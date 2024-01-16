@@ -12,31 +12,11 @@ import org.vorpal.research.kfg.ir.value.Value
 import org.vorpal.research.kfg.ir.value.instruction.CmpOpcode
 import org.vorpal.research.kfg.ir.value.instruction.Instruction
 import org.vorpal.research.kfg.ir.value.instruction.InstructionBuilder
-import org.vorpal.research.kfg.type.ArrayType
-import org.vorpal.research.kfg.type.BoolType
-import org.vorpal.research.kfg.type.ByteType
-import org.vorpal.research.kfg.type.CharType
-import org.vorpal.research.kfg.type.ClassType
-import org.vorpal.research.kfg.type.DoubleType
-import org.vorpal.research.kfg.type.FloatType
-import org.vorpal.research.kfg.type.IntType
-import org.vorpal.research.kfg.type.LongType
-import org.vorpal.research.kfg.type.PrimitiveType
-import org.vorpal.research.kfg.type.ShortType
-import org.vorpal.research.kfg.type.Type
-import org.vorpal.research.kfg.type.TypeFactory
-import org.vorpal.research.kfg.type.boolWrapper
-import org.vorpal.research.kfg.type.byteWrapper
-import org.vorpal.research.kfg.type.charWrapper
-import org.vorpal.research.kfg.type.doubleWrapper
-import org.vorpal.research.kfg.type.floatWrapper
-import org.vorpal.research.kfg.type.intWrapper
-import org.vorpal.research.kfg.type.longWrapper
-import org.vorpal.research.kfg.type.parseStringToType
-import org.vorpal.research.kfg.type.shortWrapper
+import org.vorpal.research.kfg.type.*
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.collection.LRUCache
 import org.vorpal.research.kthelper.compareTo
+import org.vorpal.research.kthelper.logging.debug
 import org.vorpal.research.kthelper.logging.log
 
 val Type.javaDesc get() = this.name.javaString
@@ -129,12 +109,33 @@ fun NameMapper.parseValueOrNull(valueName: String): Value? {
         valueName.matches(Regex("-?\\d+")) -> values.getInt(valueName.toInt())
         valueName.matches(Regex("-?\\d+.\\d+f")) -> values.getFloat(valueName.toFloat())
         valueName.matches(Regex("-?\\d+.\\d+")) -> values.getDouble(valueName.toDouble())
-        valueName.matches(Regex("\".*\"", RegexOption.DOT_MATCHES_ALL)) -> values.getString(valueName.substring(1, valueName.lastIndex))
-        valueName.matches(Regex(".*(/.*)+.class")) -> values.getClass("L${valueName.removeSuffix(".class")};")
+        valueName.matches(Regex("\".*\"", RegexOption.DOT_MATCHES_ALL)) -> values.getString(
+            valueName.substring(1, valueName.lastIndex)
+        )
+
+        valueName.matches(Regex(".*(/.*)+.class")) -> values.getClass(
+            "L${
+                valueName.removeSuffix(".class").removeMockitoMockSuffix()
+            };"
+        )
+
         valueName == "null" -> values.nullConstant
         valueName == "true" -> values.trueConstant
         valueName == "false" -> values.falseConstant
         else -> null
+    }
+}
+
+
+const val SUBSTRING_TO_FILTER_FROM_TYPE = "\$MockitoMock\$"
+fun String.removeMockitoMockSuffix(): String {
+    val suffixIndex = lastIndexOf(SUBSTRING_TO_FILTER_FROM_TYPE)
+    return if (suffixIndex == -1) {
+        this
+    } else {
+        log.debug { "MOCKITO_MOCK FIX. value: $this. Stack trace:" }
+//        log.debug(Thread.currentThread().stackTrace.joinToString("\n"))
+        removeRange(suffixIndex, length)
     }
 }
 
@@ -146,7 +147,7 @@ fun Type.getAllSubtypes(tf: TypeFactory): Set<Type> = when (this) {
 
 
 fun parseAsConcreteType(typeFactory: TypeFactory, name: String): KexType? {
-    val type = parseStringToType(typeFactory, name)
+    val type = parseStringToType(typeFactory, name.removeMockitoMockSuffix())
     return when {
         type.isConcrete -> type.kexType
         else -> null
@@ -175,14 +176,17 @@ private object SubTypeInfoCache {
     private val subtypeCache = LRUCache<Pair<String, String>, Boolean>(100_000U)
     fun check(lhv: Type, rhv: Type): Boolean {
         val key = lhv.toString() to rhv.toString()
-        return subtypeCache[key] ?: lhv.isSubtypeOf(rhv, outerClassBehavior = false).also {
+        return subtypeCache[key] ?: (lhv.isSubtypeOf(rhv, outerClassBehavior = false) || lhv.sameButMockito(rhv)).also {
             subtypeCache[key] = it
         }
     }
 }
 
+private fun Type.sameButMockito(expectedKfgType: Type) =
+    name.removeMockitoMockSuffix() == expectedKfgType.name.removeMockitoMockSuffix()
+
 fun Type.isSubtypeOfCached(other: Type): Boolean = SubTypeInfoCache.check(this, other)
 
 fun Field.isOuterThis(): Boolean {
-    return klass.outerClass != null && name.matches("this\\$\\d+".toRegex())  && type == klass.outerClass!!.asType
+    return klass.outerClass != null && name.matches("this\\$\\d+".toRegex()) && type == klass.outerClass!!.asType
 }
