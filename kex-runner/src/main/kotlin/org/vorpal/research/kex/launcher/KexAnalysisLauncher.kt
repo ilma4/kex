@@ -4,6 +4,7 @@ import org.vorpal.research.kex.ExecutionContext
 import org.vorpal.research.kex.asm.manager.ClassInstantiationDetector
 import org.vorpal.research.kex.asm.util.AccessModifier
 import org.vorpal.research.kex.random.easyrandom.EasyRandomDriver
+import org.vorpal.research.kex.sbst.plusMockito
 import org.vorpal.research.kex.util.PathClassLoader
 import org.vorpal.research.kex.util.getIntrinsics
 import org.vorpal.research.kex.util.getKexRuntime
@@ -69,7 +70,7 @@ abstract class KexAnalysisLauncher(classPaths: List<String>, targetName: String)
     val accessLevel: AccessModifier
 
     init {
-        val containerPaths = classPaths.map { Paths.get(it).toAbsolutePath() }
+        val containerPaths = classPaths.map { Paths.get(it).toAbsolutePath() }.plusMockito()
         val containerClassLoader = PathClassLoader(containerPaths)
         containers = listOfNotNull(
             *containerPaths.mapToArray {
