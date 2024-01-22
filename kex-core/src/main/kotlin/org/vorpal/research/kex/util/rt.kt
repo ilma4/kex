@@ -9,6 +9,7 @@ import org.vorpal.research.kfg.container.Container
 import org.vorpal.research.kfg.container.JarContainer
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.logging.log
+import org.vorpal.research.kthelper.tryOrNull
 import java.io.File
 import java.nio.file.Path
 import kotlin.io.path.readLines
@@ -60,7 +61,10 @@ fun getRuntime(): Container? {
 fun getIntrinsics(): Container? {
     val libPath = kexConfig.libPath ?: return null
     val intrinsicsVersion = kexConfig.getStringValue("kex", "intrinsicsVersion") ?: return null
-    return JarContainer(libPath.resolve("kex-intrinsics-${intrinsicsVersion}.jar"), Package.defaultPackage)
+    return JarContainer(
+        libPath.resolve("kex-intrinsics-${intrinsicsVersion}.jar"),
+        Package.defaultPackage
+    )
 }
 
 fun getPathSeparator(): String = File.pathSeparator
@@ -68,21 +72,31 @@ fun getPathSeparator(): String = File.pathSeparator
 fun getJunit(): Container? {
     val libPath = kexConfig.libPath ?: return null
     val junitVersion = kexConfig.getStringValue("kex", "junitVersion") ?: return null
-    return JarContainer(libPath.resolve("junit-$junitVersion.jar").toAbsolutePath(), Package.defaultPackage)
+    return JarContainer(
+        libPath.resolve("junit-$junitVersion.jar").toAbsolutePath(),
+        Package.defaultPackage
+    )
 }
 
 fun getMockito(): Container? {
     val libPath = kexConfig.libPath ?: return null
-    val mockitoVersion = "4.11.0" // TODO: Mock. Make configurable
-    return JarContainer(libPath.resolve("mockito-core-$mockitoVersion.jar").toAbsolutePath(), Package("org.mockito"))
+    val mockitoVersion = kexConfig.getStringValue("mock", "mockitoVersion") ?: return null
+    val mockitoPath = libPath.resolve("mockito-core-$mockitoVersion.jar").toAbsolutePath()
+    return JarContainer(mockitoPath, Package("org.mockito"))
 }
 
-fun getMockitoInline(): Container? {
-    val libPath = kexConfig.libPath ?: return null
-    val mockitoVersion = "4.11.0" // TODO: Mock. Make configurable
-    return JarContainer(libPath.resolve("mockito-inline-$mockitoVersion.jar").toAbsolutePath(), Package.defaultPackage)
+enum class MockingMode {
+    BASIC, FULL
 }
 
+fun getMockingMode(): MockingMode? {
+    val mockingMode = kexConfig.getStringValue("mock", "mode") ?: return null
+    return tryOrNull { MockingMode.valueOf(mockingMode.uppercase()) }
+}
+
+fun getMockingEnabled(): Boolean {
+    return kexConfig.getBooleanValue("mock", "enabled", false)
+}
 
 fun getKexRuntime(): Container? {
     if (!kexConfig.getBooleanValue("kex", "useKexRuntime", true)) return null
