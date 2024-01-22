@@ -44,6 +44,7 @@ class MockUtilsPrinter(
     init {
         with(builder) {
             import("org.mockito.Mockito")
+            import ("org.junit.Test")
 
             with(klass) {
                 initMockito = method("mockitoInitTest") {
@@ -51,7 +52,7 @@ class MockUtilsPrinter(
                     +"assert (mock.hashCode() == 0 || mock.hashCode() != 0)"
                 }.apply {
                     returnType = void
-                    annotations += "Test"
+                    annotations += "Test" // TODO timeout
                 }
                 staticClass(MOCK_INIT_TEST_CLASS) {
                     method("mockitoInitTest") {
