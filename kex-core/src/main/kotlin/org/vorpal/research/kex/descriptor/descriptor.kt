@@ -265,6 +265,25 @@ sealed class AbstractFieldContainingDescriptor(
     fun remove(field: Pair<String, KexType>): Descriptor? = fields.remove(field)
 
 
+    protected fun concretizeFields(
+        cm: ClassManager,
+        accessLevel: AccessModifier,
+        random: Random,
+        visited: MutableSet<Descriptor>
+    ) {
+        for ((field, value) in fields.toMap()) {
+            fields[field] = value.concretize(cm, accessLevel, random, visited)
+        }
+    }
+    protected fun reduceFields(visited: MutableSet<Descriptor>) {
+        for ((field, value) in fields.toMap()) {
+            when {
+                value eq descriptor { default(field.second) } -> fields.remove(field)
+                else -> fields[field] = value.reduce(visited)
+            }
+        }
+    }
+
     override fun print(map: MutableMap<Descriptor, String>): String {
         if (this in map) return ""//map[this]!!
         map[this] = term.name
@@ -299,6 +318,7 @@ sealed class AbstractFieldContainingDescriptor(
         }
     }
 
+
     override fun collectInitializerState(set: MutableSet<Descriptor>): PredicateState {
         if (this in set) return emptyState()
         set += this
@@ -312,35 +332,12 @@ sealed class AbstractFieldContainingDescriptor(
         }
     }
 
-
-    protected fun concretizeFields(
-        cm: ClassManager,
-        accessLevel: AccessModifier,
-        random: Random,
-        visited: MutableSet<Descriptor>
-    ) {
-        for ((field, value) in fields.toMap()) {
-            fields[field] = value.concretize(cm, accessLevel, random, visited)
-        }
-    }
-
     override fun contains(other: Descriptor, visited: MutableSet<Descriptor>): Boolean {
         if (this in visited) return false
         if (this == other) return true
         visited += this
         return fields.values.any { it.contains(other, visited) }
     }
-
-
-    protected fun reduceFields(visited: MutableSet<Descriptor>) {
-        for ((field, value) in fields.toMap()) {
-            when {
-                value eq descriptor { default(field.second) } -> fields.remove(field)
-                else -> fields[field] = value.reduce(visited)
-            }
-        }
-    }
-
     override fun generateTypeInfo(visited: MutableSet<Descriptor>): PredicateState {
         if (this in visited) return emptyState()
         visited += this
@@ -360,8 +357,6 @@ sealed class AbstractFieldContainingDescriptor(
             }
         }
     }
-
-
     override fun countDepth(visited: Set<Descriptor>, cache: MutableMap<Descriptor, Int>): Int {
         if (this in cache) return cache[this]!!
         if (this in visited) return 0
