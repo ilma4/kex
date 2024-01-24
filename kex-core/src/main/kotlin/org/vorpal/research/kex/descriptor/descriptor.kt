@@ -242,8 +242,7 @@ sealed class ConstantDescriptor(term: Term, type: KexType) : Descriptor(term, ty
     }
 }
 
-@Suppress("UNCHECKED_CAST")
-sealed class AbstractFieldContainingDescriptor<T : AbstractFieldContainingDescriptor<T>>(
+sealed class AbstractFieldContainingDescriptor(
     term: Term,
     klass: KexClass
 ) :
@@ -265,19 +264,6 @@ sealed class AbstractFieldContainingDescriptor<T : AbstractFieldContainingDescri
     fun remove(field: String, type: KexType): Descriptor? = fields.remove(field to type)
     fun remove(field: Pair<String, KexType>): Descriptor? = fields.remove(field)
 
-    fun merge(other: T): T {
-        val newFields = other.fields + this.fields
-        this.fields.clear()
-        this.fields.putAll(newFields)
-        return this as T
-    }
-
-    fun accept(other: T): T {
-        val newFields = other.fields.mapValues { it.value.deepCopy(mutableMapOf(other to this)) }
-        this.fields.clear()
-        this.fields.putAll(newFields)
-        return this as T
-    }
 
     override fun print(map: MutableMap<Descriptor, String>): String {
         if (this in map) return ""//map[this]!!
@@ -326,24 +312,6 @@ sealed class AbstractFieldContainingDescriptor<T : AbstractFieldContainingDescri
         }
     }
 
-    override fun concretize(
-        cm: ClassManager,
-        accessLevel: AccessModifier,
-        random: Random,
-        visited: MutableSet<Descriptor>
-    ): T {
-        if (this in visited) return this as T
-        visited += this
-
-        this.klass = instantiationManager.getConcreteClass(klass, cm, accessLevel, random)
-        this.type = klass
-        this.klassDescriptor["name" to KexJavaClass()] = descriptor { string("$type") }
-
-        this.term = term { generate(type) }
-        concretizeFields(cm, accessLevel, random, visited)
-
-        return this as T
-    }
 
     protected fun concretizeFields(
         cm: ClassManager,
@@ -363,12 +331,6 @@ sealed class AbstractFieldContainingDescriptor<T : AbstractFieldContainingDescri
         return fields.values.any { it.contains(other, visited) }
     }
 
-    override fun reduce(visited: MutableSet<Descriptor>): T {
-        if (this in visited) return this as T
-        visited += this
-        reduceFields(visited)
-        return this as T
-    }
 
     protected fun reduceFields(visited: MutableSet<Descriptor>) {
         for ((field, value) in fields.toMap()) {
@@ -399,20 +361,6 @@ sealed class AbstractFieldContainingDescriptor<T : AbstractFieldContainingDescri
         }
     }
 
-    override fun structuralEquality(other: Descriptor, map: MutableSet<Pair<Descriptor, Descriptor>>): Boolean {
-        if (this == other) return true
-        if (other !is FieldContainingDescriptor<*>) return false
-        if (this to other in map) return true
-        if (this.klass != other.klass) return false
-
-        map += this to other
-        for ((field, type) in this.fields.keys.union(other.fields.keys)) {
-            val thisValue = this[field, type] ?: return false
-            val otherValue = other[field, type] ?: return false
-            if (!thisValue.structuralEquality(otherValue, map)) return false
-        }
-        return true
-    }
 
     override fun countDepth(visited: Set<Descriptor>, cache: MutableMap<Descriptor, Int>): Int {
         if (this in cache) return cache[this]!!
@@ -427,11 +375,67 @@ sealed class AbstractFieldContainingDescriptor<T : AbstractFieldContainingDescri
     }
 }
 
+@Suppress("UNCHECKED_CAST")
 sealed class FieldContainingDescriptor<T : FieldContainingDescriptor<T>>(
     term: Term,
     klass: KexClass
 ) :
-    AbstractFieldContainingDescriptor<T>(term, klass) {
+    AbstractFieldContainingDescriptor(term, klass) {
+
+    override fun concretize(
+        cm: ClassManager,
+        accessLevel: AccessModifier,
+        random: Random,
+        visited: MutableSet<Descriptor>
+    ): T {
+        if (this in visited) return this as T
+        visited += this
+
+        this.klass = instantiationManager.getConcreteClass(klass, cm, accessLevel, random)
+        this.type = klass
+        this.klassDescriptor["name" to KexJavaClass()] = descriptor { string("$type") }
+
+        this.term = term { generate(type) }
+        concretizeFields(cm, accessLevel, random, visited)
+
+        return this as T
+    }
+
+    fun merge(other: T): T {
+        val newFields = other.fields + this.fields
+        this.fields.clear()
+        this.fields.putAll(newFields)
+        return this as T
+    }
+
+    fun accept(other: T): T {
+        val newFields = other.fields.mapValues { it.value.deepCopy(mutableMapOf(other to this)) }
+        this.fields.clear()
+        this.fields.putAll(newFields)
+        return this as T
+    }
+
+    override fun reduce(visited: MutableSet<Descriptor>): T {
+        if (this in visited) return this as T
+        visited += this
+        reduceFields(visited)
+        return this as T
+    }
+
+    override fun structuralEquality(other: Descriptor, map: MutableSet<Pair<Descriptor, Descriptor>>): Boolean {
+        if (this == other) return true
+        if (other !is FieldContainingDescriptor<*>) return false
+        if (this to other in map) return true
+        if (this.klass != other.klass) return false
+
+        map += this to other
+        for ((field, type) in this.fields.keys.union(other.fields.keys)) {
+            val thisValue = this[field, type] ?: return false
+            val otherValue = other[field, type] ?: return false
+            if (!thisValue.structuralEquality(otherValue, map)) return false
+        }
+        return true
+    }
 }
 
 class ObjectDescriptor(klass: KexClass) :
@@ -647,7 +651,7 @@ class ArrayDescriptor(val elementType: KexType, val length: Int) :
 }
 
 class MockDescriptor(term: Term, type: KexClass, methods: Collection<Method> = emptyList()) :
-    AbstractFieldContainingDescriptor<MockDescriptor>(term, type) {
+    AbstractFieldContainingDescriptor(term, type) {
 
     constructor(type: KexClass, methods: Collection<Method>) : this(term { generate(type) }, type, methods)
     constructor(methods: Collection<Method>, original: ObjectDescriptor) : this(
