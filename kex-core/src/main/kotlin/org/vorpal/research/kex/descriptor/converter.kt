@@ -70,10 +70,11 @@ class Object2DescriptorConverter : DescriptorBuilder() {
     }
 
     private val Class<*>.kexTypeMockitoMockFixed: KexType
-        get() = if (!this.name.containsMockitoMock) {
-            this.kex
-        } else {
-            KexClass(this.kex.name.removeMockitoMockSuffix())
+        get() = when {
+            !getMockingEnabled() || !getMockitoClassesWorkaroundEnabled() -> this.kex
+
+            !this.name.containsMockitoMock -> this.kex
+            else -> KexClass(this.kex.name.removeMockitoMockSuffix())
         }
 
     fun convert(any: Any?, depth: Int = 0): Descriptor {
@@ -236,7 +237,8 @@ class Object2DescriptorConverter : DescriptorBuilder() {
         val result = array(array.size, elementType)
         for ((index, element) in array.withIndex()) {
             if (index > maxArrayLength) break
-            val elementDescriptor = convertElement(array.javaClass.componentType, element, depth + 1)
+            val elementDescriptor =
+                convertElement(array.javaClass.componentType, element, depth + 1)
             result[index] = elementDescriptor
         }
         return result
