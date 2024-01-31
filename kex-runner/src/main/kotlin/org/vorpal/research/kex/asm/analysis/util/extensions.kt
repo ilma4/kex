@@ -121,9 +121,6 @@ private fun Parameters<Descriptor>.finalizeDescriptors(
     if (!getMockingEnabled() || getMockito() == null || getMockingMode() == null) {
         return this
     }
-    if (getMockingMode() == MockingMode.FULL) {
-        TODO("Not implemented")
-    }
     if (!asList.any { it.isMockable(ctx.types) }) {
         return this
     }
@@ -215,7 +212,10 @@ suspend fun Method.checkAsyncIncremental(
         when (result) {
             is Result.SatResult -> try {
                 val fullPS = checker.state + checker.queries[index].hardConstraints
-                generateInitialDescriptors(this, ctx, result.model, fullPS).first
+                generateInitialDescriptors(this, ctx, result.model, fullPS)
+                    .let { (descriptors, generator) ->
+                        descriptors.finalizeDescriptors(ctx, generator, state)
+                    }
                     .concreteParameters(ctx.cm, ctx.accessLevel, ctx.random).also {
                         log.debug { "Generated params:\n$it" }
                     }

@@ -26,7 +26,6 @@ import org.vorpal.research.kthelper.KtException
 import org.vorpal.research.kthelper.assert.ktassert
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.collection.stackOf
-import org.vorpal.research.kthelper.logging.debug
 import org.vorpal.research.kthelper.logging.log
 import org.vorpal.research.kthelper.toInt
 import org.vorpal.research.kthelper.`try`
@@ -176,13 +175,7 @@ class SymbolicTraceBuilder(
 
     override fun toString() = "$clauses"
 
-    private fun String.toType(): Type = parseDescOrNull(cm.type, this)!!.let {
-        if (it.name.contains(SUBSTRING_TO_FILTER_FROM_TYPE)) {
-            it.name.removeMockitoMockSuffix().toType().also { log.debug { "Prevented mockito mock type: $it" } }
-        } else {
-            it
-        }
-    }
+    private fun String.toType(): Type = parseDescOrNull(cm.type, this)!!
 
     private fun safeCall(body: () -> Unit) = `try` {
         body()
@@ -1270,15 +1263,11 @@ class SymbolicTraceBuilder(
 
         val kfgValue = parseValue(value)
         val termValue = mkValue(kfgValue)
-//        val realType = type.removeMockitoMockSuffix()
-        val realType = type
-        log.debug { "type: $type\nrealType: $realType" }
-        val expectedKfgType = parseStringToType(cm.type, realType)
+        val expectedKfgType = parseStringToType(cm.type, type)
         val comparisonResult = when (concreteValue) {
             null -> false
             else -> {
                 val actualKfgType = concreteValue.getConcreteType(termValue.type).getKfgType(ctx.types)
-                // TODO: fix "...$MockitoMock$..." classes on the terms/descriptors generation
                 actualKfgType.isSubtypeOfCached(expectedKfgType)
             }
         }

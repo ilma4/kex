@@ -196,7 +196,7 @@ class DescriptorExceptionPreconditionBuilder(
         is ConstantDescriptor -> this.asSymbolicState(location, mapping, visited)
         is FieldContainingDescriptor<*> -> this.asSymbolicState(location, mapping, visited)
         is ArrayDescriptor -> this.asSymbolicState(location, mapping, visited)
-        is MockDescriptor -> TODO("Mock. Implement later")
+        is MockDescriptor -> TODO("Not implemented")
     }
 
     private fun ConstantDescriptor.asSymbolicState(
@@ -362,7 +362,9 @@ class ConstraintExceptionPreconditionBuilder(
                             location,
                             state { (mapped `is` original.type) equality true }
                         )
-                        typePrecondition += StateClause(location, state { casted equality (mapped `as` original.type) })
+                        typePrecondition += StateClause(
+                            location,
+                            state { casted equality (mapped `as` original.type) })
                         this[original] = casted
                     }
                 }

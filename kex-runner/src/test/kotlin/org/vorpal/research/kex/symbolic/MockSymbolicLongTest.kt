@@ -1,4 +1,4 @@
-package org.vorpal.research.kex.concolic
+package org.vorpal.research.kex.symbolic
 
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -10,7 +10,7 @@ import kotlin.time.ExperimentalTime
 @ExperimentalSerializationApi
 @InternalSerializationApi
 @DelicateCoroutinesApi
-class MockConcolicLongTest : ConcolicTest("mock-concolic") {
+class MockSymbolicLongTest : SymbolicTest("mock-symbolic") {
     val prefix = "org/vorpal/research/kex/test/concolic/mock/"
 
     @Test
@@ -34,19 +34,18 @@ class MockConcolicLongTest : ConcolicTest("mock-concolic") {
 
     @Test
     fun mockWithFieldsTests() {
-        assertCoverage(cm[prefix + "MockWithFieldsTests"], 1.0)
+        val eps = 0.03
+        assertCoverage(cm[prefix + "MockWithFieldsTests"], 1.0, eps)
     }
 
     @Test
     fun mockStaticsTests() {
-        val eps = 0.03
-        assertCoverage(cm[prefix + "MockStaticsTests"], 1.0, eps)
+        assertCoverage(cm[prefix + "MockStaticsTests"], 1.0, 0.0)
     }
 
     @Test
     fun mockListTests() {
-        val eps = 0.12
-        assertCoverage(cm[prefix + "MockListTests"], 1.0, eps)
+        assertCoverage(cm[prefix + "MockListTests"], 1.0, 0.0)
     }
 
     @Test
@@ -56,6 +55,7 @@ class MockConcolicLongTest : ConcolicTest("mock-concolic") {
 
     @Test
     fun mockSetTests(){
+        // unstable test. Anything can happen
         val eps = 0.5
         assertCoverage(cm[prefix + "MockSetTests"], 1.0, eps)
     }
