@@ -17,11 +17,11 @@ import org.vorpal.research.kex.smt.Result
 import org.vorpal.research.kex.state.IncrementalPredicateState
 import org.vorpal.research.kex.state.PredicateQuery
 import org.vorpal.research.kex.state.predicate.CallPredicate
+import org.vorpal.research.kex.state.predicate.PredicateType
 import org.vorpal.research.kex.state.term.Term
 import org.vorpal.research.kex.state.term.term
 import org.vorpal.research.kex.state.transformer.*
 import org.vorpal.research.kex.trace.symbolic.SymbolicState
-import org.vorpal.research.kex.util.MockingMode
 import org.vorpal.research.kex.util.getMockingEnabled
 import org.vorpal.research.kex.util.getMockingMode
 import org.vorpal.research.kex.util.getMockito
@@ -57,7 +57,7 @@ fun methodCalls(
     return state.clauses
         .asSequence()
         .map { clause -> clause.predicate }
-        .filter { predicate -> predicate.type.name == "S" }
+        .filter { predicate -> predicate.type is PredicateType.State }
         .filterIsInstance<CallPredicate>()
         .filter { predicate -> predicate.hasLhv }
         .map { predicate ->
