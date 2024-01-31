@@ -137,6 +137,6 @@ class ConcolicKexTool : Tool {
 }
 
 fun List<Path>.plusMockito(): List<Path> {
-    val mockitoPath = getMockito()?.path?.toAbsolutePath() ?: return this
+    val mockitoPath = kexConfig.mockito?.path?.toAbsolutePath() ?: return this
     return this.toMutableList().apply { add(mockitoPath) }.toList()
 }
