@@ -98,6 +98,11 @@ fun getMockingEnabled(): Boolean {
     return kexConfig.getBooleanValue("mock", "enabled", false)
 }
 
+
+fun getMockitoClassesWorkaroundEnabled(): Boolean {
+    return kexConfig.getBooleanValue("mock", "mockitoClassesWorkaround", true)
+}
+
 fun getLogTypeFix(): Boolean {
     return kexConfig.getBooleanValue("mock", "logTypeFix", false)
 }
