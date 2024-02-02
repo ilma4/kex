@@ -9,6 +9,7 @@ import org.vorpal.research.kfg.container.Container
 import org.vorpal.research.kfg.container.JarContainer
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.logging.log
+import org.vorpal.research.kthelper.tryOrNull
 import java.io.File
 import java.nio.file.Path
 import kotlin.io.path.readLines
@@ -79,6 +80,11 @@ val Config.mockito: Container?
         val mockitoPath = libPath.resolve("mockito-core-$mockitoVersion.jar").toAbsolutePath()
         return JarContainer(mockitoPath, Package("org.mockito"))
     }
+
+// debug purposes, normally should be false
+val Config.isMockTest: Boolean
+    get() = getBooleanValue("mock", "test", false).also{if (it) println("Test feature invoked!")}
+
 
 fun getRuntime(): Container? {
     if (!kexConfig.getBooleanValue("kex", "useJavaRuntime", true)) return null
