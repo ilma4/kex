@@ -5,6 +5,7 @@ import org.vorpal.research.kex.config.kexConfig
 import org.vorpal.research.kex.ktype.*
 import org.vorpal.research.kex.parameters.Parameters
 import org.vorpal.research.kex.reanimator.actionsequence.*
+import org.vorpal.research.kfg.ir.Class
 import org.vorpal.research.kfg.type.*
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.logging.error
@@ -19,7 +20,8 @@ class ExecutorAS2JavaPrinter(
     klassName: String,
     private val setupName: String
 ) : ActionSequence2JavaPrinter(ctx, packageName, klassName) {
-    private val surroundInTryCatch = kexConfig.getBooleanValue("testGen", "surroundInTryCatch", true)
+    private val surroundInTryCatch =
+        kexConfig.getBooleanValue("testGen", "surroundInTryCatch", true)
     private val testTimeout = kexConfig.getIntValue("testGen", "testTimeout", 10).seconds
     private val testParams = mutableListOf<JavaBuilder.JavaClass.JavaField>()
     private val reflectionUtils = ReflectionUtilsPrinter.reflectionUtils(packageName)
@@ -472,13 +474,17 @@ class ExecutorAS2JavaPrinter(
 
     override fun printReflectionArrayWrite(owner: ActionSequence, call: ReflectionArrayWrite): List<String> {
         val elementType = call.elementType
-        val setElementMethod = elementType.kexType.primitiveName?.let { reflectionUtils.setPrimitiveElementMap[it]!! }
-            ?: reflectionUtils.setElement
+        val setElementMethod =
+            elementType.kexType.primitiveName?.let { reflectionUtils.setPrimitiveElementMap[it]!! }
+                ?: reflectionUtils.setElement
         return listOf("${setElementMethod.name}(${owner.name}, ${call.index.stackName}, ${call.value.stackName})")
     }
 
+    // FIXME: remove that map
+    val mockType: MutableMap<ActionSequence, Class> = mutableMapOf()
     override fun printMockNewInstance(owner: ActionSequence, call: MockNewInstance): List<String> {
         builder.import("org.mockito.Mockito")
+        mockType[owner] = call.klass
         val actualType = ASClass(ctx.types.objectType)
         val kfgClass = call.klass
         return listOf(
@@ -524,23 +530,18 @@ class ExecutorAS2JavaPrinter(
         if (call.returnValues.isEmpty()) {
             return emptyList()
         }
+
         call.returnValues.forEach { it.printAsJava() }
+        val returns = call.returnValues.joinToString(separator = ", ") { value ->
+            value.forceCastIfNull(call.method.returnType.getKfgType(ctx.types).asType)
+        }
 
-        val returnValues = call.returnValues
-            .map { it.stackName }
-            .joinToString(separator = ", ", prefix = "new Object[]{", postfix = "}") { it }
+        val anys = call.method.paramTypes.joinToString(separator = ", ") { type ->
+            mockitoAnyFromType(type.getKfgType(ctx.types))
+        }
 
-        val anys = call.method.paramTypes
-            .map { mockitoAnyFromType(it.getKfgType(ctx.types)) }
-            .joinToString(prefix = "new Object[]{", postfix = "}", separator = ", ") { it }
-
-        val paramTypes = call.method.paramTypes
-            .map { it.getKfgType(ctx.types).klassType }
-            .joinToString(prefix = "new Class<?>[] {", postfix = "}", separator = ",") { it }
-
-        val methodName = '"' + call.method.name + '"'
-        return listOf(
-            "${mockUtils.setupMethod.name}($methodName, $paramTypes, ${owner.stackName}, $anys, $returnValues)"
-        )
+        val methodName = call.method.name
+        val instance = "(${owner.cast(mockType[owner]!!.asType.asType)})"
+        return listOf("Mockito.when($instance.$methodName($anys)).thenReturn($returns)")
     }
 }
