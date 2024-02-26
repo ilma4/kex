@@ -32,17 +32,28 @@
         <compiler-plugin.version>3.5.1</compiler-plugin.version>
 
         <kt-helper.version>0.1.13</kt-helper.version>
-        <kfg.version>0.4.12</kfg.version>
+        <kfg.version>0.4.13</kfg.version>
 
         <logback.version>1.2.11</logback.version>
         <slf4j.version>1.7.36</slf4j.version>
         <commons-cli.version>1.5.0</commons-cli.version>
+
+        <mockito.version>4.11.0</mockito.version>
+
+        <test.jvm.params>
+            -XX:+IgnoreUnrecognizedVMOptions
+            --add-opens=java.base/java.lang=ALL-UNNAMED
+            --add-opens=java.base/java.util=ALL-UNNAMED
+            --add-opens=java.base/java.math=ALL-UNNAMED
+            --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+            --illegal-access=warn
+        </test.jvm.params>
     </properties>
 
     <repositories>
         <repository>
-            <id>github-vorpal-research-kotlin-maven</id>
-            <url>https://maven.vorpal-research.science</url>
+            <id>github-apal-research-kotlin-maven</id>
+            <url>https://maven.apal-research.com</url>
         </repository>
     </repositories>
 
@@ -87,6 +98,17 @@
                 <artifactId>kotlin-maven-plugin</artifactId>
                 <version>${kotlin.version}</version>
             </plugin>
+<!--
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.1.2</version>
+                <configuration>
+                    <parallel>all</parallel>
+                    <threadCount>8</threadCount>
+                </configuration>
+            </plugin>
+-->
         </plugins>
     </build>
 

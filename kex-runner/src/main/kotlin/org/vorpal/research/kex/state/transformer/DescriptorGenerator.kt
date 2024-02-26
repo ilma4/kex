@@ -50,12 +50,21 @@ class DescriptorGenerator(
                 is ConstantDescriptor.Float -> this.value
                 is ConstantDescriptor.Double -> this.value
             }
+
             else -> this
         }
 
     override fun checkPath(path: Predicate): Boolean = when (path) {
-        is EqualityPredicate -> checkTerms(path.lhv, path.rhv) { a, b -> a.numericValue == b.numericValue }
-        is InequalityPredicate -> checkTerms(path.lhv, path.rhv) { a, b -> a.numericValue != b.numericValue }
+        is EqualityPredicate -> checkTerms(
+            path.lhv,
+            path.rhv
+        ) { a, b -> a.numericValue == b.numericValue }
+
+        is InequalityPredicate -> checkTerms(
+            path.lhv,
+            path.rhv
+        ) { a, b -> a.numericValue != b.numericValue }
+
         is DefaultSwitchPredicate -> {
             val lhv = path.cond
             val conditions = path.cases
@@ -63,6 +72,7 @@ class DescriptorGenerator(
             val condValues = conditions.map { (it as ConstIntTerm).value }
             lhvValue !in condValues
         }
+
         else -> unreachable { log.error("Unexpected predicate in path: $path") }
     }
 }
@@ -125,7 +135,7 @@ fun generateInitialDescriptors(
     ctx: ExecutionContext,
     model: SMTModel,
     state: PredicateState
-): Parameters<Descriptor> {
+): Pair<Parameters<Descriptor>, DescriptorGenerator> {
     val generator = DescriptorGenerator(method, ctx, model, InitialDescriptorReanimator(model, ctx))
     generator.apply(state)
     return Parameters(
@@ -134,8 +144,9 @@ fun generateInitialDescriptors(
             arg ?: descriptor { default(method.argTypes[index].kexType) }
         },
         generator.staticFields
-    )
+    ) to generator
 }
+
 
 fun generateInitialDescriptorsAndAA(
     method: Method,
@@ -150,6 +161,6 @@ fun generateInitialDescriptorsAndAA(
         generator.args.mapIndexed { index, arg ->
             arg ?: descriptor { default(method.argTypes[index].kexType) }
         },
-        generator.staticFields
+        generator.staticFields,
     ) to SMTModelALiasAnalysis(generator)
 }

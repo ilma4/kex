@@ -9,7 +9,9 @@ import org.vorpal.research.kfg.container.Container
 import org.vorpal.research.kfg.container.JarContainer
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.logging.log
+import java.io.File
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.io.path.readLines
 
 val Config.outputDirectory: Path get() = getPathValue("kex", "outputDir")!!.normalize()
@@ -49,6 +51,49 @@ val Config.libPath: Path?
         runtimeDepsPath?.resolve(it)?.normalize()
     }
 
+fun getJDKPath(): Path {
+    return Paths.get(System.getProperty("java.home")).parent.toAbsolutePath()
+}
+
+fun getJavaPath(): Path = Paths.get(System.getProperty("java.home"), "bin", "java").toAbsolutePath()
+
+val Config.isMockingEnabled: Boolean
+    get() = getBooleanValue("mock", "enabled", false)
+
+val Config.isMockitoClassesWorkaroundEnabled: Boolean
+    get() = getBooleanValue("mock", "mockitoClassesWorkaround", true)
+
+val Config.isMockitoJava8WorkaroundEnabled: Boolean
+    get() = getBooleanValue("mock", "java8WorkaroundEnabled", false)
+
+val Config.logTypeFix: Boolean
+    get() = getBooleanValue("mock", "logTypeFix", false)
+
+val Config.logStackTraceTypeFix: Boolean
+    get() = getBooleanValue("mock", "logStackTraceTypeFix", false)
+
+val Config.isExpectMocks: Boolean
+    get() = getBooleanValue("mock", "expectMocks", false)
+
+val Config.isFixConcreteLambdas: Boolean
+    get() = getBooleanValue("mock", "concreteLambdasPassEnabled", false)
+
+val Config.isEasyRandomExcludeLambdas: Boolean
+    get() = getBooleanValue("mock", "easyRandomExcludeLambdas", false)
+
+val Config.mockito: Container?
+    get() {
+        val libPath = libPath ?: return null
+        val mockitoVersion = getStringValue("mock", "mockitoVersion") ?: return null
+        val mockitoPath = libPath.resolve("mockito-core-$mockitoVersion.jar").toAbsolutePath()
+        return JarContainer(mockitoPath, Package("org.mockito"))
+    }
+
+// debug purposes, normally should be false
+val Config.isMockTest: Boolean
+    get() = getBooleanValue("mock", "test", false).also { if (it) println("Test feature invoked!") }
+
+
 fun getRuntime(): Container? {
     if (!kexConfig.getBooleanValue("kex", "useJavaRuntime", true)) return null
     val libPath = kexConfig.libPath ?: return null
@@ -59,15 +104,21 @@ fun getRuntime(): Container? {
 fun getIntrinsics(): Container? {
     val libPath = kexConfig.libPath ?: return null
     val intrinsicsVersion = kexConfig.getStringValue("kex", "intrinsicsVersion") ?: return null
-    return JarContainer(libPath.resolve("kex-intrinsics-${intrinsicsVersion}.jar"), Package.defaultPackage)
+    return JarContainer(
+        libPath.resolve("kex-intrinsics-${intrinsicsVersion}.jar"),
+        Package.defaultPackage
+    )
 }
 
-fun getPathSeparator(): String = System.getProperty("path.separator")
+fun getPathSeparator(): String = File.pathSeparator
 
 fun getJunit(): Container? {
     val libPath = kexConfig.libPath ?: return null
     val junitVersion = kexConfig.getStringValue("kex", "junitVersion") ?: return null
-    return JarContainer(libPath.resolve("junit-$junitVersion.jar").toAbsolutePath(), Package.defaultPackage)
+    return JarContainer(
+        libPath.resolve("junit-$junitVersion.jar").toAbsolutePath(),
+        Package.defaultPackage
+    )
 }
 
 fun getKexRuntime(): Container? {

@@ -16,9 +16,7 @@ import org.vorpal.research.kex.ktype.KexShort
 import org.vorpal.research.kex.ktype.KexString
 import org.vorpal.research.kex.ktype.KexType
 import org.vorpal.research.kex.ktype.asArray
-import org.vorpal.research.kex.util.allFields
-import org.vorpal.research.kex.util.isStatic
-import org.vorpal.research.kex.util.kex
+import org.vorpal.research.kex.util.*
 import org.vorpal.research.kfg.type.SystemTypeNames
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.logging.log
@@ -30,7 +28,9 @@ private val maxGenerationDepth by lazy {
 private val maxArrayLength by lazy {
     kexConfig.getIntValue("reanimator", "maxArrayLength", 10_000)
 }
-
+private val ignoreSyntheticObjects by lazy {
+    kexConfig.getBooleanValue("reanimator", "ignoreSyntheticObjects", false)
+}
 
 class Object2DescriptorConverter : DescriptorBuilder() {
     private val objectToDescriptor = IdentityHashMap<Any, Descriptor>()
@@ -64,12 +64,20 @@ class Object2DescriptorConverter : DescriptorBuilder() {
                 is LongArray -> KexLong.asArray()
                 is FloatArray -> KexFloat.asArray()
                 is DoubleArray -> KexDouble.asArray()
-                is Array<*> -> any.javaClass.componentType.kex
+                is Array<*> -> any.javaClass.componentType.kexTypeMockitoMockFixed.asArray()
                 is String -> KexString()
-                else -> any.javaClass.kex
+                else -> any.javaClass.kexTypeMockitoMockFixed
             }
         }
     }
+
+    private val Class<*>.kexTypeMockitoMockFixed: KexType
+        get() = when {
+            !kexConfig.isMockingEnabled || !kexConfig.isMockitoClassesWorkaroundEnabled -> this.kex
+
+            !this.name.containsMockitoMock -> this.kex
+            else -> KexClass(this.kex.name.removeMockitoMockSuffix())
+        }
 
     fun convert(any: Any?, depth: Int = 0): Descriptor {
         if (any == null) return `null`
@@ -184,6 +192,8 @@ class Object2DescriptorConverter : DescriptorBuilder() {
         if (depth > maxGenerationDepth) return `null`
 
         val klass = any.javaClass
+        if (klass.isSynthetic) return `null`
+
         val kexClass = klass.kex as KexClass
         val result = `object`(kexClass)
         objectToDescriptor[any] = result

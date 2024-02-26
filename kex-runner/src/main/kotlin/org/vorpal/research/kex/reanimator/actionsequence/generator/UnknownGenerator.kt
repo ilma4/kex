@@ -1,22 +1,10 @@
 package org.vorpal.research.kex.reanimator.actionsequence.generator
 
-import org.vorpal.research.kex.descriptor.ArrayDescriptor
-import org.vorpal.research.kex.descriptor.ClassDescriptor
-import org.vorpal.research.kex.descriptor.ConstantDescriptor
-import org.vorpal.research.kex.descriptor.Descriptor
-import org.vorpal.research.kex.descriptor.ObjectDescriptor
+import org.vorpal.research.kex.descriptor.*
 import org.vorpal.research.kex.ktype.KexNull
 import org.vorpal.research.kex.ktype.KexRtManager.rtUnmapped
 import org.vorpal.research.kex.ktype.kexType
-import org.vorpal.research.kex.reanimator.actionsequence.ActionSequence
-import org.vorpal.research.kex.reanimator.actionsequence.PrimaryValue
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionArrayWrite
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionList
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionNewArray
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionNewInstance
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionSetField
-import org.vorpal.research.kex.reanimator.actionsequence.ReflectionSetStaticField
-import org.vorpal.research.kex.reanimator.actionsequence.UnknownSequence
+import org.vorpal.research.kex.reanimator.actionsequence.*
 import org.vorpal.research.kfg.UnknownInstanceException
 import org.vorpal.research.kfg.type.ArrayType
 import org.vorpal.research.kfg.type.ClassType
@@ -53,6 +41,7 @@ class UnknownGenerator(
                     actionSequence += ReflectionSetField(kfgField, valueAS)
                 }
             }
+
             is ArrayDescriptor -> {
                 val kfgArray = (descriptor.type.getKfgType(types) as ArrayType)
                 val lengthCall = PrimaryValue(descriptor.length)
@@ -66,6 +55,7 @@ class UnknownGenerator(
                     }
                 }
             }
+
             is ClassDescriptor -> {
                 val kfgClass = (descriptor.type.getKfgType(types) as ClassType).klass
                 for ((field, value) in descriptor.fields) {
@@ -80,6 +70,7 @@ class UnknownGenerator(
                     actionSequence += ReflectionSetStaticField(kfgField, valueAS)
                 }
             }
+
             else -> UnknownSequence(
                 "${descriptor.term}",
                 descriptor.wrappedType,
@@ -90,8 +81,9 @@ class UnknownGenerator(
         getFromCache(descriptor)!!
     }
 
-    private val Descriptor.wrappedType get() = when (this.type) {
-        is KexNull -> context.types.objectType
-        else -> this.type.getKfgType(context.types)
-    }
+    private val Descriptor.wrappedType
+        get() = when (this.type) {
+            is KexNull -> context.types.objectType
+            else -> this.type.getKfgType(context.types)
+        }
 }

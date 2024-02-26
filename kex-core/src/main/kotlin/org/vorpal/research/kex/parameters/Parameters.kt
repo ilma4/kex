@@ -3,13 +3,17 @@ package org.vorpal.research.kex.parameters
 import kotlinx.serialization.Serializable
 import org.vorpal.research.kex.asm.util.AccessModifier
 import org.vorpal.research.kex.config.kexConfig
-import org.vorpal.research.kex.descriptor.ClassDescriptor
-import org.vorpal.research.kex.descriptor.Descriptor
-import org.vorpal.research.kex.descriptor.Object2DescriptorConverter
+import org.vorpal.research.kex.descriptor.*
 import org.vorpal.research.kex.ktype.KexClass
 import org.vorpal.research.kex.ktype.KexRtManager.rtMapped
+import org.vorpal.research.kex.mocking.MockMaker
+import org.vorpal.research.kex.state.predicate.CallPredicate
+import org.vorpal.research.kex.state.term.CallTerm
+import org.vorpal.research.kex.state.term.Term
 import org.vorpal.research.kex.util.KfgTargetFilter
 import org.vorpal.research.kfg.ClassManager
+import org.vorpal.research.kthelper.logging.log
+import org.vorpal.research.kthelper.logging.warn
 import kotlin.random.Random
 
 @Serializable
@@ -29,13 +33,21 @@ data class Parameters<T>(
     }
 }
 
+fun <T, U> Parameters<T>.map(transform: (T) -> U): Parameters<U> {
+    return Parameters(
+        this.instance?.let(transform),
+        this.arguments.map(transform),
+        this.statics.mapTo(mutableSetOf(), transform)
+    )
+}
+
 val Parameters<Any?>.asDescriptors: Parameters<Descriptor>
     get() {
         val context = Object2DescriptorConverter()
         return Parameters(
             context.convert(instance),
             arguments.map { context.convert(it) },
-            statics.mapTo(mutableSetOf()) { context.convert(it) }
+            statics.mapTo(mutableSetOf()) { context.convert(it) },
         )
     }
 
@@ -46,7 +58,7 @@ fun Parameters<Descriptor>.concreteParameters(
 ) = Parameters(
     instance?.concretize(cm, accessLevel, random),
     arguments.map { it.concretize(cm, accessLevel, random) },
-    statics.mapTo(mutableSetOf()) { it.concretize(cm, accessLevel, random) }
+    statics.mapTo(mutableSetOf()) { it.concretize(cm, accessLevel, random) },
 )
 
 fun Parameters<Descriptor>.filterStaticFinals(cm: ClassManager): Parameters<Descriptor> {
@@ -87,3 +99,43 @@ fun Parameters<Descriptor>.filterIgnoredStatic(): Parameters<Descriptor> {
 }
 
 
+fun createDescriptorToMock(
+    allDescriptors: Collection<Descriptor>,
+    mockMakers: List<MockMaker>
+): Map<Descriptor, MockDescriptor> {
+    val descriptorToMock = mutableMapOf<Descriptor, MockDescriptor>()
+    allDescriptors.forEach {
+        it.transform(descriptorToMock) { descriptor ->
+            mockMakers.firstNotNullOfOrNull { mockMaker -> mockMaker.mockOrNull(descriptor) }
+        }
+    }
+    return descriptorToMock
+}
+
+
+fun Descriptor.requireMocks(
+    mockMakers: List<MockMaker>, visited: MutableSet<Descriptor> = mutableSetOf()
+): Boolean =
+    any(visited) { descriptor -> mockMakers.any { mockMaker -> mockMaker.canMock(descriptor) } }
+
+
+fun setupMocks(
+    methodCalls: List<CallPredicate>,
+    termToDescriptor: Map<Term, Descriptor>,
+    descriptorToMock: Map<Descriptor, MockDescriptor>
+) {
+    for (callPredicate in methodCalls) {
+        if (!callPredicate.hasLhv) continue
+        val call = callPredicate.call as CallTerm
+        if (call.method.name == "getClass") continue
+
+        val mock =
+            termToDescriptor[call.owner]?.let { descriptorToMock[it] ?: it } as? MockDescriptor
+        val value = termToDescriptor[callPredicate.lhvUnsafe]?.let { descriptorToMock[it] ?: it }
+        mock ?: log.warn { "No mock for $call" }
+
+        if (mock is MockDescriptor && value != null) {
+            mock.addReturnValue(call.method, value)
+        }
+    }
+}

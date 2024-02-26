@@ -168,7 +168,8 @@ class JavaBuilder(val pkg: String = "") {
             return this
         }
 
-        fun ifElse(condition: String, body: ElseIfStatement.() -> Unit) = ifElse(StringConditionStatement(condition), body)
+        fun ifElse(condition: String, body: ElseIfStatement.() -> Unit) =
+            ifElse(StringConditionStatement(condition), body)
     }
 
     data class DoWhileStatement(
@@ -323,6 +324,7 @@ class JavaBuilder(val pkg: String = "") {
         val constructors = mutableListOf<JavaConstructor>()
         val staticInits = mutableListOf<JavaStaticInitializer>()
         val methods = mutableListOf<JavaMethod>()
+        val staticClasses = mutableListOf<JavaClass>()
 
         data class JavaField(
             val name: String,
@@ -369,6 +371,13 @@ class JavaBuilder(val pkg: String = "") {
             return funBuilder
         }
 
+        fun staticClass(name: String, body: JavaClass.() -> Unit): JavaClass {
+            val classBuilder = JavaClass(pkg, name)
+            classBuilder.body()
+            staticClasses += classBuilder
+            return classBuilder
+        }
+
         fun method(name: String, typeArgs: List<Type>, body: JavaFunction.() -> Unit): JavaFunction {
             val funBuilder = JavaMethod(this, name, typeArgs)
             funBuilder.body()
@@ -394,6 +403,10 @@ class JavaBuilder(val pkg: String = "") {
             }
             methods.forEach {
                 appendLine(it.print(level + 1))
+            }
+            staticClasses.forEach {
+                // TODO: Mock. Adding "static" here is crutch. Implement modifiers configuration (static, public, etc)
+                appendLine("static" + it.print(level + 1))
             }
             appendLine("};")
         }

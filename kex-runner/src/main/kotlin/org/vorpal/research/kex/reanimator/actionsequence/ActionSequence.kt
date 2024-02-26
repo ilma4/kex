@@ -34,7 +34,7 @@ class PrimaryValue<T>(val value: T) : ActionSequence(value.toString()) {
     override fun clone(): ActionSequence = this
 }
 
-class StringValue(val value: String = "") : ActionSequence(value)  {
+class StringValue(val value: String = "") : ActionSequence(value) {
     override val isConstantValue: Boolean get() = true
 
     override fun print() = value
@@ -97,6 +97,7 @@ class ActionList(
                     is ActionList -> top.flatMap { it.parameters }.forEach {
                         queue += it
                     }
+
                     else -> {}
                 }
             }
@@ -169,6 +170,7 @@ class ReflectionList(
         return builder.toString()
     }
 
+
     override fun print(builder: StringBuilder, visited: MutableSet<ActionSequence>) {
         if (this in visited) return
         visited += this
@@ -183,6 +185,61 @@ class ReflectionList(
 
     fun clear() {
         list.clear()
+    }
+}
+
+class MockSequence(
+    name: String,
+    val mockCalls: MutableList<MockCall>, // create instance and setup methods
+    val reflectionCalls: MutableList<ReflectionCall> // only setup fields
+) : ActionSequence(name) {
+    constructor(name: String) : this(name, mutableListOf(), mutableListOf())
+
+    override fun print(): String {
+        val builder = StringBuilder()
+        this.print(builder, mutableSetOf())
+        return builder.toString()
+    }
+
+    override fun print(builder: StringBuilder, visited: MutableSet<ActionSequence>) {
+        if (this in visited) return
+        visited += this
+        for (mockCall in mockCalls) {
+            mockCall.print(this, builder, visited)
+        }
+        for (reflectionCall in reflectionCalls) {
+            reflectionCall.print(this, builder, visited)
+        }
+    }
+
+    override fun clone() = MockSequence(name, mockCalls.toMutableList(), reflectionCalls.toMutableList())
+}
+
+sealed interface MockCall {
+    val parameters: List<ActionSequence>
+
+    fun print(owner: ActionSequence, builder: StringBuilder, visited: MutableSet<ActionSequence>)
+}
+
+data class MockNewInstance(val klass: Class, val extraInterfaces: Set<Class>) : MockCall {
+    override val parameters: List<ActionSequence>
+        get() = listOf()
+
+    override fun toString() = "Mockito.mock(${klass.fullName}})"
+
+    override fun print(owner: ActionSequence, builder: StringBuilder, visited: MutableSet<ActionSequence>) {
+        builder.appendLine { "${owner.name} = $this" }
+    }
+}
+
+data class MockSetupMethod(
+    val method: Method, val returnValues: List<ActionSequence>
+) : MockCall {
+    override val parameters: List<ActionSequence>
+        get() = returnValues
+
+    override fun print(owner: ActionSequence, builder: StringBuilder, visited: MutableSet<ActionSequence>) {
+        builder.appendLine { "${owner.name}.$method returns $returnValues" }
     }
 }
 
@@ -258,8 +315,7 @@ data class InnerClassConstructorCall(
     val constructor: Method,
     val outerObject: ActionSequence,
     val args: List<ActionSequence>
-) :
-    CodeAction {
+) : CodeAction {
     override val parameters: List<ActionSequence> get() = listOf(outerObject) + args
 
     override fun toString() = "${outerObject}.$constructor(${args.joinToString(", ")})"
@@ -360,7 +416,15 @@ data class NewArrayWithInitializer(
     override fun toString() = elements.joinToString(", ", prefix = "{", postfix = "}") { it.name }
     override fun print(owner: ActionSequence, builder: StringBuilder, visited: MutableSet<ActionSequence>) {
         elements.forEach { it.print(builder, visited) }
-        builder.appendLine("${asArray.component} ${owner.name} = ${elements.joinToString(", ", prefix = "{", postfix = "}") { it.name }}")
+        builder.appendLine(
+            "${asArray.component} ${owner.name} = ${
+                elements.joinToString(
+                    ", ",
+                    prefix = "{",
+                    postfix = "}"
+                ) { it.name }
+            }"
+        )
     }
 }
 
@@ -483,6 +547,7 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             val newTarget = mapper.map(ct.target)
             UnknownSequence(newTarget.term.toString(), ct.type.mapped, newTarget)
         }
+
         is TestCall -> TestCall(ct.name, ct.test, ct.instance?.let { map(it) }, ct.args.map { map(it) })
         is ReflectionList -> when (ct) {
             in cache -> cache[ct]!!
@@ -495,6 +560,7 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
                 res
             }
         }
+
         is ActionList -> when (ct) {
             in cache -> cache[ct]!!
             else -> {
@@ -506,6 +572,23 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
                 res
             }
         }
+
+        is MockSequence -> when (ct) {
+            in cache -> cache[ct]!!
+            else -> {
+                val res = MockSequence(ct.name.mapped)
+                cache[ct] = res
+                for (mockCall in ct.mockCalls) {
+                    res.mockCalls += map(mockCall)
+                }
+                for (reflectionCall in ct.reflectionCalls) {
+                    res.reflectionCalls += map(reflectionCall)
+                }
+
+                // TODO: Mock. Not sure if it works
+                res
+            }
+        }
     }
 
     private val Class.mapped
@@ -513,6 +596,13 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             KexRtManager.Mode.MAP -> rtMapped
             KexRtManager.Mode.UNMAP -> rtUnmapped
         }
+
+    private val Method.mapped
+        get() = when (mode) {
+            KexRtManager.Mode.MAP -> rtMapped
+            KexRtManager.Mode.UNMAP -> rtUnmapped
+        }
+
 
     private val Type.mapped
         get() = when (mode) {
@@ -535,6 +625,7 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             val unmappedField = unmappedKlass.getField(api.field.name, api.field.type.mapped)
             ReflectionSetField(unmappedField, map(api.value))
         }
+
         is ReflectionSetStaticField -> {
             val unmappedKlass = api.field.klass.mapped
             val unmappedField = unmappedKlass.getField(api.field.name, api.field.type.mapped)
@@ -553,10 +644,12 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             )
             ConstructorCall(unmappedMethod, api.args.map { map(it) })
         }
+
         is DefaultConstructorCall -> {
             val unmappedKlass = api.klass.mapped
             DefaultConstructorCall(unmappedKlass)
         }
+
         is EnumValueCreation -> EnumValueCreation(api.klass.mapped, api.name)
         is ExternalConstructorCall -> {
             val unmappedKlass = api.constructor.klass.mapped
@@ -567,6 +660,7 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             )
             ExternalConstructorCall(unmappedMethod, api.args.map { map(it) })
         }
+
         is ExternalMethodCall -> {
             val unmappedKlass = api.method.klass.mapped
             val unmappedMethod = unmappedKlass.getMethod(
@@ -576,11 +670,13 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             )
             ExternalMethodCall(unmappedMethod, map(api.instance), api.args.map { map(it) })
         }
+
         is FieldSetter -> {
             val unmappedKlass = api.field.klass.mapped
             val unmappedField = unmappedKlass.getField(api.field.name, api.field.type.mapped)
             FieldSetter(unmappedField, map(api.value))
         }
+
         is InnerClassConstructorCall -> {
             val unmappedKlass = api.constructor.klass.mapped
             val unmappedMethod = unmappedKlass.getMethod(
@@ -591,6 +687,7 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             InnerClassConstructorCall(unmappedMethod,
                 map(api.outerObject), api.args.map { map(it) })
         }
+
         is MethodCall -> {
             val unmappedKlass = api.method.klass.mapped
             val unmappedMethod = unmappedKlass.getMethod(
@@ -600,6 +697,7 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             )
             MethodCall(unmappedMethod, api.args.map { map(it) })
         }
+
         is NewArray -> NewArray(api.klass.mapped, map(api.length))
         is NewArrayWithInitializer -> NewArrayWithInitializer(api.klass.mapped, api.elements.map { map(it) })
         is StaticFieldGetter -> {
@@ -607,11 +705,13 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             val unmappedField = unmappedKlass.getField(api.field.name, api.field.type.mapped)
             StaticFieldGetter(unmappedField)
         }
+
         is StaticFieldSetter -> {
             val unmappedKlass = api.field.klass.mapped
             val unmappedField = unmappedKlass.getField(api.field.name, api.field.type.mapped)
             StaticFieldSetter(unmappedField, map(api.value))
         }
+
         is StaticMethodCall -> {
             val unmappedKlass = api.method.klass.mapped
             val unmappedMethod = unmappedKlass.getMethod(
@@ -621,7 +721,13 @@ class ActionSequenceRtMapper(private val mode: KexRtManager.Mode) {
             )
             StaticMethodCall(unmappedMethod, api.args.map { map(it) })
         }
+
         is ClassConstantGetter -> ClassConstantGetter(api.type.mapped)
         is ArrayClassConstantGetter -> ArrayClassConstantGetter(map(api.elementType))
+    }
+
+    fun map(api: MockCall): MockCall = when (api) {
+        is MockNewInstance -> MockNewInstance(api.klass.mapped, api.extraInterfaces.map{it.mapped}.toSet())
+        is MockSetupMethod -> MockSetupMethod(api.method.mapped, api.returnValues.map { value -> map(value) })
     }
 }

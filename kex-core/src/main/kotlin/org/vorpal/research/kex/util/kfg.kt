@@ -2,6 +2,7 @@
 
 package org.vorpal.research.kex.util
 
+import org.vorpal.research.kex.config.kexConfig
 import org.vorpal.research.kex.ktype.KexType
 import org.vorpal.research.kex.ktype.kexType
 import org.vorpal.research.kfg.Package
@@ -37,6 +38,7 @@ import org.vorpal.research.kfg.type.shortWrapper
 import org.vorpal.research.kthelper.assert.unreachable
 import org.vorpal.research.kthelper.collection.LRUCache
 import org.vorpal.research.kthelper.compareTo
+import org.vorpal.research.kthelper.logging.debug
 import org.vorpal.research.kthelper.logging.log
 
 val Type.javaDesc get() = this.name.javaString
@@ -129,12 +131,38 @@ fun NameMapper.parseValueOrNull(valueName: String): Value? {
         valueName.matches(Regex("-?\\d+")) -> values.getInt(valueName.toInt())
         valueName.matches(Regex("-?\\d+.\\d+f")) -> values.getFloat(valueName.toFloat())
         valueName.matches(Regex("-?\\d+.\\d+")) -> values.getDouble(valueName.toDouble())
-        valueName.matches(Regex("\".*\"", RegexOption.DOT_MATCHES_ALL)) -> values.getString(valueName.substring(1, valueName.lastIndex))
+        valueName.matches(Regex("\".*\"", RegexOption.DOT_MATCHES_ALL)) -> values.getString(
+            valueName.substring(
+                1,
+                valueName.lastIndex
+            )
+        )
+
         valueName.matches(Regex(".*(/.*)+.class")) -> values.getClass("L${valueName.removeSuffix(".class")};")
         valueName == "null" -> values.nullConstant
         valueName == "true" -> values.trueConstant
         valueName == "false" -> values.falseConstant
         else -> null
+    }
+}
+
+
+const val SUBSTRING_TO_FILTER_FROM_TYPE = "\$MockitoMock\$"
+
+val String.containsMockitoMock: Boolean get() = contains(SUBSTRING_TO_FILTER_FROM_TYPE)
+
+fun String.removeMockitoMockSuffix(): String {
+    val suffixIndex = lastIndexOf(SUBSTRING_TO_FILTER_FROM_TYPE)
+    return if (suffixIndex == -1) {
+        this
+    } else {
+        if (kexConfig.logTypeFix) {
+            log.debug { "MOCKITO_MOCK FIX. value: $this" }
+            if (kexConfig.logStackTraceTypeFix) {
+                log.debug { "Stack trace: ${Thread.currentThread().stackTrace.joinToString("\n")}" }
+            }
+        }
+        removeRange(suffixIndex, length)
     }
 }
 
@@ -184,5 +212,5 @@ private object SubTypeInfoCache {
 fun Type.isSubtypeOfCached(other: Type): Boolean = SubTypeInfoCache.check(this, other)
 
 fun Field.isOuterThis(): Boolean {
-    return klass.outerClass != null && name.matches("this\\$\\d+".toRegex())  && type == klass.outerClass!!.asType
+    return klass.outerClass != null && name.matches("this\\$\\d+".toRegex()) && type == klass.outerClass!!.asType
 }

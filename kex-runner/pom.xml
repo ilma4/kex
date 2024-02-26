@@ -15,7 +15,7 @@
         <mainClass>org.vorpal.research.kex.ConcolicKt</mainClass>
 
         <better-parse.version>0.4.4</better-parse.version>
-        <jacoco.version>0.8.8</jacoco.version>
+        <jacoco.version>0.8.11</jacoco.version>
         <junit.version>4.13.2</junit.version>
 
         <commons-text.version>1.10.0</commons-text.version>
@@ -110,6 +110,11 @@
             <artifactId>commons-text</artifactId>
             <version>${commons-text.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -160,6 +165,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.0</version>
                 <configuration>
+                    <argLine>${test.jvm.params}</argLine>
                     <systemPropertyVariables>
                         <!--suppress UnresolvedMavenProperty -->
                         <root.dir>${project.parent.basedir.canonicalPath}</root.dir>
