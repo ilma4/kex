@@ -67,14 +67,17 @@ abstract class KexAnalysisLauncher(classPaths: List<String>, targetName: String)
     val accessLevel: AccessModifier
 
     init {
-        val containerPaths = classPaths.map { Paths.get(it).toAbsolutePath() }
+        val containerPaths = classPaths.map { Paths.get(it).toAbsolutePath() }.let {
+            val mockito = kexConfig.mockito ?: return@let it
+            it.plusElement(mockito.path)
+        }
+
         val containerClassLoader = PathClassLoader(containerPaths)
         containers = listOfNotNull(
             *containerPaths.mapToArray {
                 it.asContainer() ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
             },
             getKexRuntime(),
-            kexConfig.mockito
         )
         val analysisJars = listOfNotNull(*containers.toTypedArray(), getRuntime(), getIntrinsics())
 

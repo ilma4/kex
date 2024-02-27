@@ -75,10 +75,15 @@ class ConcolicKexTool : Tool {
 
 
     override fun initialize(src: File, bin: File, classPath: List<File>) {
-        val containerPaths = classPath.map { it.toPath().toAbsolutePath() }
-        containerClassLoader = URLClassLoader(containerPaths.map { it.toUri().toURL() }.toTypedArray())
+        val containerPaths = classPath.map { it.toPath().toAbsolutePath() }.let {
+            val mockito = kexConfig.mockito ?: return@let it
+            it.plusElement(mockito.path)
+        }
+        containerClassLoader =
+            URLClassLoader(containerPaths.map { it.toUri().toURL() }.toTypedArray())
         containers = listOfNotNull(kexConfig.mockito, *containerPaths.map {
-            it.asContainer() ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
+            it.asContainer()
+                ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
         }.toTypedArray(), getKexRuntime())
         val analysisJars = listOfNotNull(*containers.toTypedArray(), getRuntime(), getIntrinsics())
 
@@ -99,7 +104,8 @@ class ConcolicKexTool : Tool {
         log.debug("Access level: {}", accessLevel)
 
         val randomDriver = EasyRandomDriver()
-        context = ExecutionContext(cm, containerClassLoader, randomDriver, containerPaths, accessLevel)
+        context =
+            ExecutionContext(cm, containerClassLoader, randomDriver, containerPaths, accessLevel)
 
         log.debug("Running with class path:\n${containers.joinToString("\n") { it.name }}")
     }
