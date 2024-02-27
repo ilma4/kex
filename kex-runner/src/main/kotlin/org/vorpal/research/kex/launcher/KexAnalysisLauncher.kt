@@ -3,11 +3,9 @@ package org.vorpal.research.kex.launcher
 import org.vorpal.research.kex.ExecutionContext
 import org.vorpal.research.kex.asm.manager.ClassInstantiationDetector
 import org.vorpal.research.kex.asm.util.AccessModifier
+import org.vorpal.research.kex.config.kexConfig
 import org.vorpal.research.kex.random.easyrandom.EasyRandomDriver
-import org.vorpal.research.kex.util.PathClassLoader
-import org.vorpal.research.kex.util.getIntrinsics
-import org.vorpal.research.kex.util.getKexRuntime
-import org.vorpal.research.kex.util.getRuntime
+import org.vorpal.research.kex.util.*
 import org.vorpal.research.kfg.ClassManager
 import org.vorpal.research.kfg.KfgConfig
 import org.vorpal.research.kfg.Package
@@ -75,7 +73,8 @@ abstract class KexAnalysisLauncher(classPaths: List<String>, targetName: String)
             *containerPaths.mapToArray {
                 it.asContainer() ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
             },
-            getKexRuntime()
+            getKexRuntime(),
+            kexConfig.mockito
         )
         val analysisJars = listOfNotNull(*containers.toTypedArray(), getRuntime(), getIntrinsics())
 

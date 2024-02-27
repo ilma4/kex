@@ -77,7 +77,7 @@ class ConcolicKexTool : Tool {
     override fun initialize(src: File, bin: File, classPath: List<File>) {
         val containerPaths = classPath.map { it.toPath().toAbsolutePath() }
         containerClassLoader = URLClassLoader(containerPaths.map { it.toUri().toURL() }.toTypedArray())
-        containers = listOfNotNull(*containerPaths.map {
+        containers = listOfNotNull(kexConfig.mockito, *containerPaths.map {
             it.asContainer() ?: throw LauncherException("Can't represent ${it.toAbsolutePath()} as class container")
         }.toTypedArray(), getKexRuntime())
         val analysisJars = listOfNotNull(*containers.toTypedArray(), getRuntime(), getIntrinsics())
