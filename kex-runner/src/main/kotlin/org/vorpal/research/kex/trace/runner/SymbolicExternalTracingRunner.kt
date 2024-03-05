@@ -12,10 +12,7 @@ import org.vorpal.research.kex.trace.symbolic.protocol.ExecutionCompletedResult
 import org.vorpal.research.kex.trace.symbolic.protocol.ExecutionResult
 import org.vorpal.research.kex.trace.symbolic.protocol.ExecutionTimedOutResult
 import org.vorpal.research.kex.trace.symbolic.protocol.TestExecutionRequest
-import org.vorpal.research.kex.util.getJavaPath
-import org.vorpal.research.kex.util.getJvmModuleParams
-import org.vorpal.research.kex.util.getPathSeparator
-import org.vorpal.research.kex.util.outputDirectory
+import org.vorpal.research.kex.util.*
 import org.vorpal.research.kthelper.logging.log
 import ru.spbstu.wheels.mapToArray
 import java.nio.file.Paths
@@ -62,6 +59,7 @@ internal object ExecutorMasterController : AutoCloseable {
             "-Dlogback.statusListenerClass=ch.qos.logback.core.status.NopStatusListener",
             *getJvmModuleParams().toTypedArray(),
             *masterJvmParams,
+            "-javaagent:${kexConfig.byteBuddyAgent!!.path}",
             "-classpath", executorPath.toString(),
             executorKlass,
             "--output", "${outputDir.toAbsolutePath()}",

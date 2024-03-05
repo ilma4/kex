@@ -34,18 +34,24 @@ class PathClassLoader(
         return klass
     }
 
-    override fun loadClass(name: String): Class<*> = synchronized(this.getClassLoadingLock(name)) {
-        if (name in cache) return cache[name]!!
-        for (path in paths) {
-            val bytes = when {
-                path.isDirectory() -> readClassFromDirectory(name, path)
-                path.fileName.toString().endsWith(".jar") -> readClassFromJar(name, path)
-                else -> null
-            }
-            if (bytes != null) {
-                return defineClass(name, bytes)
-            }
+    override fun loadClass(name: String): Class<*> {
+        if (name.startsWith("org.mockito") || name.startsWith("org.objenesis") || name.startsWith("net.bytebuddy")) {
+            return Thread.currentThread().getContextClassLoader().loadClass(name)
         }
-        return parent?.loadClass(name) ?: throw ClassNotFoundException()
+
+        synchronized(this.getClassLoadingLock(name)) {
+            if (name in cache) return cache[name]!!
+            for (path in paths) {
+                val bytes = when {
+                    path.isDirectory() -> readClassFromDirectory(name, path)
+                    path.fileName.toString().endsWith(".jar") -> readClassFromJar(name, path)
+                    else -> null
+                }
+                if (bytes != null) {
+                    return defineClass(name, bytes)
+                }
+            }
+            return parent?.loadClass(name) ?: throw ClassNotFoundException()
+        }
     }
 }

@@ -1,5 +1,6 @@
 package org.vorpal.research.kex.mocking
 
+import org.mockito.Mockito
 import org.vorpal.research.kex.ExecutionContext
 import org.vorpal.research.kex.asm.manager.instantiationManager
 import org.vorpal.research.kex.descriptor.Descriptor
@@ -11,9 +12,7 @@ import org.vorpal.research.kex.ktype.KexRtManager.isKexRt
 import org.vorpal.research.kex.ktype.kexType
 import org.vorpal.research.kex.util.loadClass
 import org.vorpal.research.kfg.ir.Class
-import org.vorpal.research.kfg.type.ClassType
-import org.vorpal.research.kfg.type.TypeFactory
-import org.vorpal.research.kfg.type.objectType
+import org.vorpal.research.kfg.type.*
 
 sealed class MockMaker(protected val ctx: ExecutionContext) {
     protected val types: TypeFactory = ctx.types
@@ -23,7 +22,7 @@ sealed class MockMaker(protected val ctx: ExecutionContext) {
 
     protected fun satisfiesNecessaryConditions(descriptor: Descriptor): Boolean {
         val klass = getKlass(descriptor) ?: return false
-        return !klass.isFinal && !descriptor.type.isKexRt && descriptor is ObjectDescriptor
+        return klass.asType != types.stringType && klass.asType != types.classType && !descriptor.type.isKexRt && descriptor is ObjectDescriptor
     }
 
     protected fun getKlass(descriptor: Descriptor): Class? =

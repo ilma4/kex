@@ -27,10 +27,12 @@ class KfgClassLoader(
         private val EXCLUDES = setOf(
             "package java.*",
             "package org.vorpal.research.kex.*",
+        ).mapTo(mutableSetOf()) { KfgTargetFilter.parse(it) }
+        private val FROM_SYSTEM = setOf(
             "package org.mockito.*",
             "package net.bytebuddy.*",
             "package org.objenesis.*"
-        ).mapTo(mutableSetOf()) { KfgTargetFilter.parse(it) }
+        ).map { KfgTargetFilter.parse(it) }.toSet()
     }
 
     private fun readClassFromJar(name: String, path: Path): ByteArray? {
@@ -82,12 +84,16 @@ class KfgClassLoader(
         else -> loadClassFromClassPath(name)
     }
 
+    private fun loadFromContext(name: String): Class<*> =
+        Thread.currentThread().contextClassLoader.loadClass(name)
+
     override fun loadClass(name: String): Class<*> {
         @Suppress("NAME_SHADOWING") val name = name.javaString
         val asmName = name.asmString
         return synchronized(this.getClassLoadingLock(name)) {
             when {
                 name in cache -> cache[name]!!
+                FROM_SYSTEM.any { it.matches(asmName) } -> loadFromContext(name)
                 includes.any { it.matches(asmName) } -> loadFromKfg(name)
                 excludes.any { it.matches(asmName) } -> loadClassFromClassPath(name)
                 else -> loadFromKfg(name)

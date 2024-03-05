@@ -14,11 +14,7 @@ import org.vorpal.research.kex.trace.symbolic.protocol.ExecutionTimedOutResult
 import org.vorpal.research.kex.trace.symbolic.protocol.Master2ClientConnection
 import org.vorpal.research.kex.trace.symbolic.protocol.Master2WorkerConnection
 import org.vorpal.research.kex.trace.symbolic.protocol.MasterProtocolHandler
-import org.vorpal.research.kex.util.getJavaPath
-import org.vorpal.research.kex.util.getJvmModuleParams
-import org.vorpal.research.kex.util.getPathSeparator
-import org.vorpal.research.kex.util.newFixedThreadPoolContextWithMDC
-import org.vorpal.research.kex.util.outputDirectory
+import org.vorpal.research.kex.util.*
 import org.vorpal.research.kthelper.logging.log
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -91,6 +87,7 @@ class ExecutorMaster(
                 "-Djava.security.policy==${executorPolicyPath}",
                 "-Dlogback.statusListenerClass=ch.qos.logback.core.status.NopStatusListener",
                 *getJvmModuleParams().toTypedArray(),
+                "-javaagent:${kexConfig.byteBuddyAgent!!.path}",
                 "-classpath", workerClassPath.joinToString(getPathSeparator()),
                 executorKlass,
                 "--output", "${outputDir.toAbsolutePath()}",

@@ -83,10 +83,43 @@ val Config.isEasyRandomExcludeLambdas: Boolean
 
 val Config.mockito: Container?
     get() {
-        val libPath = libPath ?: return null
+        val libPath = libPath?.normalize() ?: return null
         val mockitoVersion = getStringValue("mock", "mockitoVersion") ?: return null
-        val mockitoPath = libPath.resolve("mockito-core-$mockitoVersion.jar").toAbsolutePath()
+        val id = "inline"
+//        val id = "core"
+        val mockitoPath = libPath.resolve("mockito-$id-$mockitoVersion.jar").toAbsolutePath()
         return JarContainer(mockitoPath, Package("org.mockito"))
+    }
+
+val Config.mockitoWithDeps: List<Container>
+    get() {
+        val libPath = libPath?.normalize() ?: return emptyList()
+        val mockitoVersion = getStringValue("mock", "mockitoVersion") ?: return emptyList()
+        val inline =
+            libPath.resolve("mockito-inline-$mockitoVersion.jar").normalize().toAbsolutePath()
+        val core = libPath.resolve("mockito-core-$mockitoVersion.jar").normalize().toAbsolutePath()
+        val bbVersion = "1.12.19"
+        val bytebuddy = libPath.resolve("byte-buddy-$bbVersion.jar").normalize().toAbsolutePath()
+        val bbAgent =
+            libPath.resolve("byte-buddy-agent-$bbVersion.jar").normalize().toAbsolutePath()
+        val objnesis = libPath.resolve("objenesis-3.3.jar").normalize().toAbsolutePath()
+        listOf(
+//            JarContainer(inline, Package("org.mockito")),
+            JarContainer(core, Package("org.mockito")),
+            JarContainer(objnesis, Package("org.objenesis")),
+            JarContainer(bytebuddy, Package("net.bytebuddy")),
+            JarContainer(bbAgent, Package("net.bytebuddy"))
+
+        )
+        return emptyList()
+    }
+
+val Config.byteBuddyAgent: Container?
+    get() {
+        val libPath = libPath?.normalize() ?: return null
+        val version = "1.12.19" ?: return null
+        val bytebuddyPath = libPath.resolve("byte-buddy-agent-$version.jar").toAbsolutePath()
+        return JarContainer(bytebuddyPath, Package("net.bytebuddy"))
     }
 
 // debug purposes, normally should be false

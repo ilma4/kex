@@ -13,17 +13,13 @@ import org.vorpal.research.kex.serialization.KexSerializer
 import org.vorpal.research.kex.trace.symbolic.protocol.ExecutionResult
 import org.vorpal.research.kex.trace.symbolic.protocol.TestExecutionRequest
 import org.vorpal.research.kex.trace.symbolic.protocol.Worker2MasterConnection
-import org.vorpal.research.kex.util.KfgClassLoader
-import org.vorpal.research.kex.util.compiledCodeDirectory
-import org.vorpal.research.kex.util.getIntrinsics
-import org.vorpal.research.kex.util.getJunit
-import org.vorpal.research.kex.util.getPathSeparator
-import org.vorpal.research.kex.util.getRuntime
+import org.vorpal.research.kex.util.*
 import org.vorpal.research.kex.worker.ExecutorWorker
 import org.vorpal.research.kfg.ClassManager
 import org.vorpal.research.kfg.KfgConfig
 import org.vorpal.research.kfg.container.asContainer
 import org.vorpal.research.kfg.util.Flags
+import org.vorpal.research.kthelper.collection.mapToArray
 import org.vorpal.research.kthelper.logging.log
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -83,6 +79,8 @@ class WorkerLauncherDebug(args: Array<String>) {
                 *classPaths.toTypedArray(),
 //                kexConfig.instrumentedCodeDirectory,
                 kexConfig.compiledCodeDirectory,
+                *kexConfig.mockitoWithDeps.mapToArray { it.path },
+//                kexConfig.mockito?.path,
                 getJunit()?.path
             )
         ) { kfgClass ->

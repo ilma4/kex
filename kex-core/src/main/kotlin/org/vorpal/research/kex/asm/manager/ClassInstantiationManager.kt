@@ -307,12 +307,11 @@ class ClassInstantiationDetector(
     override fun cleanup() {}
 
     override fun visit(klass: Class) {
-        if (ignoredInstantiations.any { it.matches(klass) }) {
-            return // todo maybe super.visit(klass)  ???
-        }
+        if (ignoredInstantiations.none { it.matches(klass) } &&
+            StringClassInstantiationManagerImpl.isDirectlyInstantiable(klass, baseAccessLevel)) {
 
-        if (StringClassInstantiationManagerImpl.isDirectlyInstantiable(klass, baseAccessLevel))
             addInstantiableClass(klass, klass)
+        }
         super.visit(klass)
     }
 

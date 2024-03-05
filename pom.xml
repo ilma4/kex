@@ -39,7 +39,7 @@
         <commons-cli.version>1.5.0</commons-cli.version>
 
         <mockito.version>4.11.0</mockito.version>
-        <mockito.id>core</mockito.id>
+        <mockito.id>inline</mockito.id>
 
         <test.jvm.params>
             -XX:+IgnoreUnrecognizedVMOptions
@@ -89,6 +89,11 @@
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-collections-immutable-jvm</artifactId>
             <version>${collections.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-${mockito.id}</artifactId>
+            <version>${mockito.version}</version>
         </dependency>
     </dependencies>
 

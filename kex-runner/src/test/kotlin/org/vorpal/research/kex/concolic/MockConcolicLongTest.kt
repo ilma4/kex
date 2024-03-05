@@ -17,6 +17,7 @@ class MockConcolicLongTest : ConcolicTest("mock-concolic") {
 
     @Test
     fun mockTest() {
+//        org.mockito.internal.configuration.plugins.PluginInitializer.loadImpl(PluginInitializer.java:52)
         assertCoverage(cm[prefix + "MockTests"], 1.0)
     }
 

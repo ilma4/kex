@@ -17,6 +17,7 @@ import org.vorpal.research.kfg.ClassManager
 import org.vorpal.research.kfg.KfgConfig
 import org.vorpal.research.kfg.container.asContainer
 import org.vorpal.research.kfg.util.Flags
+import org.vorpal.research.kthelper.collection.mapToArray
 import org.vorpal.research.kthelper.logging.log
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -61,7 +62,8 @@ class WorkerLauncher(args: Array<String>) {
                 exitProcess(1)
             }
         }
-        val classManager = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = false, verifyIR = false))
+        val classManager =
+            ClassManager(KfgConfig(flags = Flags.readAll, failOnError = false, verifyIR = false))
         classManager.initialize(
             *listOfNotNull(
                 *containers.toTypedArray(),
@@ -75,7 +77,6 @@ class WorkerLauncher(args: Array<String>) {
                 kexConfig.compiledCodeDirectory,
                 getJunit()?.path,
                 getIntrinsics()?.path,
-                kexConfig.mockito?.path,
             )
         ) { kfgClass ->
             val instrumenter = SymbolicTraceInstrumenter(classManager)

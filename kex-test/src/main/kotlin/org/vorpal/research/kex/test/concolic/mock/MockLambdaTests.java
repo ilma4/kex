@@ -9,6 +9,22 @@ import org.vorpal.research.kex.intrinsics.AssertIntrinsics;
 @SuppressWarnings("ALL")
 public class MockLambdaTests {
 
+    final class Final {
+
+        final int foo() {
+            return 42;
+        }
+    }
+
+    public static void testFinal(Final a) {
+        if (a.foo() == 228) {
+            AssertIntrinsics.kexAssert(true);
+        } else {
+            AssertIntrinsics.kexAssert(true);
+        }
+    }
+
+/*
     public void testIntSupplier(IntSupplier a) {
         if (a.getAsInt() == 42) {
             AssertIntrinsics.kexAssert(true);
@@ -32,5 +48,6 @@ public class MockLambdaTests {
             AssertIntrinsics.kexAssert(true);
         }
     }
+*/
 }
 
