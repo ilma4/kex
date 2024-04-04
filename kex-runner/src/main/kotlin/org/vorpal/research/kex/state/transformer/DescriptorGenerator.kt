@@ -8,6 +8,7 @@ import org.vorpal.research.kex.ktype.KexPointer
 import org.vorpal.research.kex.ktype.KexReference
 import org.vorpal.research.kex.ktype.KexRtManager.rtMapped
 import org.vorpal.research.kex.ktype.kexType
+import org.vorpal.research.kex.mocking.NonMockedDescriptors
 import org.vorpal.research.kex.parameters.Parameters
 import org.vorpal.research.kex.smt.FinalDescriptorReanimator
 import org.vorpal.research.kex.smt.InitialDescriptorReanimator
@@ -130,21 +131,36 @@ fun generateFinalTypeInfoMap(
     )
 }
 
+
+private class InitialDescriptors(
+    override val descriptors: Parameters<Descriptor>,
+    private val generator: DescriptorGenerator,
+) : NonMockedDescriptors {
+    override val termToDescriptor: Map<Term, Descriptor> get() = generator.memory
+    override val allDescriptors: Iterable<Descriptor> get() = generator.allValues
+
+    override fun generateAllDescriptors() {
+        generator.generateAll()
+    }
+}
+
 fun generateInitialDescriptors(
     method: Method,
     ctx: ExecutionContext,
     model: SMTModel,
     state: PredicateState
-): Pair<Parameters<Descriptor>, DescriptorGenerator> {
+): NonMockedDescriptors {
     val generator = DescriptorGenerator(method, ctx, model, InitialDescriptorReanimator(model, ctx))
     generator.apply(state)
-    return Parameters(
-        generator.instance,
-        generator.args.mapIndexed { index, arg ->
-            arg ?: descriptor { default(method.argTypes[index].kexType) }
-        },
-        generator.staticFields
-    ) to generator
+    return InitialDescriptors(
+        Parameters(
+            generator.instance,
+            generator.args.mapIndexed { index, arg ->
+                arg ?: descriptor { default(method.argTypes[index].kexType) }
+            },
+            generator.staticFields
+        ), generator
+    )
 }
 
 

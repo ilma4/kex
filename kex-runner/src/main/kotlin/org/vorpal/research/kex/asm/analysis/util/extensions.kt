@@ -6,30 +6,25 @@ import org.vorpal.research.kex.ExecutionContext
 import org.vorpal.research.kex.asm.analysis.crash.precondition.ConstraintExceptionPrecondition
 import org.vorpal.research.kex.asm.manager.MethodManager
 import org.vorpal.research.kex.asm.util.AccessModifier
-import org.vorpal.research.kex.config.kexConfig
 import org.vorpal.research.kex.descriptor.*
 import org.vorpal.research.kex.ktype.KexRtManager.isJavaRt
 import org.vorpal.research.kex.ktype.KexRtManager.rtMapped
 import org.vorpal.research.kex.ktype.kexType
-import org.vorpal.research.kex.mocking.filterNot
-import org.vorpal.research.kex.mocking.getMockMaker
+import org.vorpal.research.kex.mocking.*
 import org.vorpal.research.kex.parameters.*
 import org.vorpal.research.kex.smt.AsyncChecker
 import org.vorpal.research.kex.smt.AsyncIncrementalChecker
 import org.vorpal.research.kex.smt.Result
 import org.vorpal.research.kex.state.IncrementalPredicateState
 import org.vorpal.research.kex.state.PredicateQuery
-import org.vorpal.research.kex.state.predicate.CallPredicate
 import org.vorpal.research.kex.state.term.term
 import org.vorpal.research.kex.state.transformer.*
 import org.vorpal.research.kex.trace.symbolic.SymbolicState
-import org.vorpal.research.kex.util.isExpectMocks
-import org.vorpal.research.kex.util.isMockingEnabled
 import org.vorpal.research.kfg.ir.Method
-import org.vorpal.research.kfg.type.ClassType
 import org.vorpal.research.kthelper.logging.debug
 import org.vorpal.research.kthelper.logging.log
 import org.vorpal.research.kthelper.logging.warn
+
 
 suspend fun Method.analyzeOrTimeout(
     accessLevel: AccessModifier,
@@ -47,11 +42,6 @@ suspend fun Method.analyzeOrTimeout(
     } catch (e: TimeoutCancellationException) {
         log.warn { "Method $this processing is finished with timeout" }
     }
-}
-
-
-fun SymbolicState.methodCalls(): List<CallPredicate> {
-    return clauses.map { clause -> clause.predicate }.filterIsInstance<CallPredicate>()
 }
 
 
@@ -73,16 +63,8 @@ suspend fun Method.checkAsync(
     }
 
     return try {
-        val (initialDescriptors, generator) = generateInitialDescriptors(
-            this,
-            ctx,
-            result.model,
-            checker.state
-        )
-
-        val finalDescriptors = initialDescriptors.finalizeDescriptors(ctx, generator, state, this)
-
-        finalDescriptors
+        generateInitialDescriptors(this, ctx, result.model, checker.state)
+            .performMocking(ctx, state, this)
             .concreteParameters(ctx.cm, ctx.accessLevel, ctx.random)
             .also { log.debug { "Generated params:\n$it" } }
             .filterIgnoredStatic()
@@ -92,43 +74,6 @@ suspend fun Method.checkAsync(
     }
 }
 
-
-private fun Parameters<Descriptor>.finalizeDescriptors(
-    ctx: ExecutionContext,
-    generator: DescriptorGenerator,
-    state: SymbolicState,
-    method: Method
-): Parameters<Descriptor> {
-    if (!kexConfig.isMockingEnabled) {
-        return this
-    }
-
-    val expectedClasses = method.argTypes
-        .map { (it as? ClassType)?.klass }
-        .zip(arguments)
-        .filter { (klass, _) -> klass != null }
-        .associate { (klass, descriptor) -> descriptor to klass!! }
-
-    val mockMaker = kexConfig.getMockMaker(ctx).filterNot { desc -> desc == instance }
-    if (!kexConfig.isExpectMocks) {
-        val visited = mutableSetOf<Descriptor>()
-        if (this.asList.none { it.requireMocks(mockMaker, expectedClasses, visited) }) {
-            return this
-        }
-    }
-    generator.generateAll()
-    val visited = mutableSetOf<Descriptor>()
-    if (generator.allValues.none { it.requireMocks(mockMaker, expectedClasses, visited) }) {
-        return this
-    }
-
-
-    val descriptorToMock = createDescriptorToMock(generator.allValues, mockMaker, expectedClasses)
-    val withMocks = this.map { descriptor -> descriptorToMock[descriptor] ?: descriptor }
-    val methodCalls = state.methodCalls()
-    setupMocks(ctx.types, methodCalls, generator.memory, descriptorToMock)
-    return withMocks
-}
 
 @Suppress("unused")
 suspend fun Method.checkAsyncAndSlice(
@@ -157,14 +102,16 @@ suspend fun Method.checkAsyncAndSlice(
         )
         val filteredParams =
             params.concreteParameters(ctx.cm, ctx.accessLevel, ctx.random)
-                .also {log.debug { "Generated params:\n$it" }
-            }
+                .also {
+                    log.debug { "Generated params:\n$it" }
+                }
                 .filterIgnoredStatic()
 
         val (thisTerm, argTerms) = collectArguments(checker.state)
-        val termParams = Parameters(thisTerm, this@checkAsyncAndSlice.argTypes.mapIndexed { index, type ->
-            argTerms[index] ?: term { arg(type.kexType, index) }
-        })
+        val termParams =
+            Parameters(thisTerm, this@checkAsyncAndSlice.argTypes.mapIndexed { index, type ->
+                argTerms[index] ?: term { arg(type.kexType, index) }
+            })
 
         filteredParams to ConstraintExceptionPrecondition(
             termParams,
@@ -195,7 +142,8 @@ suspend fun Method.checkAsyncIncremental(
         this,
         IncrementalPredicateState(
             clauses + query,
-            queries.map { PredicateQuery(it.clauses.asState() + it.path.asState()) }.toPersistentList()
+            queries.map { PredicateQuery(it.clauses.asState() + it.path.asState()) }
+                .toPersistentList()
         ),
         concreteTypeInfo,
         enableInlining
@@ -206,9 +154,7 @@ suspend fun Method.checkAsyncIncremental(
             is Result.SatResult -> try {
                 val fullPS = checker.state + checker.queries[index].hardConstraints
                 generateInitialDescriptors(this, ctx, result.model, fullPS)
-                    .let { (descriptors, generator) ->
-                        descriptors.finalizeDescriptors(ctx, generator, state, this)
-                    }
+                    .performMocking(ctx, state, this)
                     .concreteParameters(ctx.cm, ctx.accessLevel, ctx.random).also {
                         log.debug { "Generated params:\n$it" }
                     }
@@ -243,7 +189,8 @@ suspend fun Method.checkAsyncIncrementalAndSlice(
         this,
         IncrementalPredicateState(
             clauses + query,
-            queries.map { PredicateQuery(it.clauses.asState() + it.path.asState()) }.toPersistentList()
+            queries.map { PredicateQuery(it.clauses.asState() + it.path.asState()) }
+                .toPersistentList()
         ),
         concreteTypeInfo,
         enableInlining
@@ -274,7 +221,10 @@ suspend fun Method.checkAsyncIncrementalAndSlice(
 
                 filteredParams to ConstraintExceptionPrecondition(
                     termParams,
-                    SymbolicStateForwardSlicer(termParams.asList.toSet(), aa).apply(state + queries[index])
+                    SymbolicStateForwardSlicer(
+                        termParams.asList.toSet(),
+                        aa
+                    ).apply(state + queries[index])
                 )
             } catch (e: Throwable) {
                 log.error("Error during descriptor generation: ", e)

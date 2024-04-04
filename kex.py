@@ -1,19 +1,19 @@
 #!/bin/python3
 
-import subprocess
-import typing
-import re
-import sys
 import os.path
+import re
+import subprocess
+import sys
 
-KEX_VERSION = "0.0.1"
-HEAP_MEMORY_SIZE = "12g"
+KEX_VERSION = "0.0.2"
+HEAP_MEMORY_SIZE = "8g"
 STACK_MEMORY_SIZE = "1g"
 
-MODULES_FILE = os.path.join("runtime-deps", "modules.info")
+kex_home = os.path.dirname(os.path.realpath(__file__))
+MODULES_FILE = os.path.join(kex_home, "runtime-deps", "modules.info")
 
 
-def get_jvm_version():
+def get_jvm_version() -> int:
 	pattern = '\"(1.)?(\d+).*\"'
 	runner = subprocess.Popen(
 		["java", "-version"],
@@ -24,7 +24,7 @@ def get_jvm_version():
 	version = re.search(pattern, stdout.decode()).groups()[1]
 	return int(version)
 
-def get_jvm_args():
+def get_jvm_args() -> list [str]:
 	version = get_jvm_version()
 	if version < 8:
 		print("Only Java version 8+ is supported", file=sys.stderr)
@@ -40,23 +40,25 @@ def get_jvm_args():
 		args.append("--illegal-access=warn")
 		return args
 
-def run_kex(args):
+def run_kex(args: list [str]):
+	kex_env = os.environ.copy()
+	kex_env["KEX_HOME"] = kex_home
 	command = ["java",
 		"-Xmx{}".format(HEAP_MEMORY_SIZE),
 		"-Djava.security.manager",
-		"-Djava.security.policy==kex.policy",
+		"-Djava.security.policy=={}".format(os.path.join(kex_home, "kex.policy")),
 		"-Dlogback.statusListenerClass=ch.qos.logback.core.status.NopStatusListener"
 	]
 	command.extend(get_jvm_args())
 	command.extend([
-		"-jar", os.path.join("kex-runner", "target", "kex-runner-{}-jar-with-dependencies.jar".format(KEX_VERSION))
+		"-jar", os.path.join(kex_home, "kex-runner", "target", "kex-runner-{}-jar-with-dependencies.jar".format(KEX_VERSION))
 	])
 	command.extend(args)
-	kexProcess = subprocess.Popen(command)
+	kexProcess = subprocess.Popen(command, env=kex_env)
 	kexProcess.wait()
 	return kexProcess.returncode
 
-def main():
+def main() -> int:
 	return run_kex(sys.argv[1:])
 
 if __name__ == "__main__":
