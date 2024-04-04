@@ -21,7 +21,7 @@ import org.vorpal.research.kfg.Package
 import org.vorpal.research.kfg.container.Container
 import org.vorpal.research.kfg.container.asContainer
 import org.vorpal.research.kfg.util.Flags
-import org.vorpal.research.kfg.visitor.executePipeline
+import org.vorpal.research.kfg.visitor.executePackagePipeline
 import org.vorpal.research.kthelper.logging.log
 import java.io.File
 import java.net.URLClassLoader
@@ -66,7 +66,7 @@ class ConcolicKexTool : Tool {
                 klassPath
             )
 
-            executePipeline(cm, target) {
+            executePackagePipeline(cm, target) {
                 +ClassInstantiationDetector(context)
             }
         }
@@ -114,7 +114,7 @@ class ConcolicKexTool : Tool {
             val klass = context.cm[canonicalName]
             log.debug("Running on klass {}", klass)
 
-            executePipeline(context.cm, Package.defaultPackage) {
+            executePackagePipeline(context.cm, Package.defaultPackage) {
                 +SystemExitTransformer(context.cm)
             }
 
