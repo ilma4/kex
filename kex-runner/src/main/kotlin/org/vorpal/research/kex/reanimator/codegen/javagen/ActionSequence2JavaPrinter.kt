@@ -256,9 +256,8 @@ open class ActionSequence2JavaPrinter(
                 actionSequence.args.forEach { resolveTypes(it, visited) }
             }
 
-            is MockSequence -> {
+            is MockList -> {
                 actionSequence.mockCalls.reversed().map { resolveTypes(it, visited) }
-                actionSequence.reflectionCalls.reversed().map { resolveTypes(it, visited) }
             }
 
             else -> {}
@@ -344,6 +343,7 @@ open class ActionSequence2JavaPrinter(
     private fun resolveTypes(mockCall: MockCall, visited: MutableSet<String>): Unit = when (mockCall) {
         is MockNewInstance -> {}
         is MockSetupMethod -> mockCall.returnValues.forEach { value -> resolveTypes(value, visited) }
+        is MockSetField    -> resolveTypes(mockCall.value, visited)
     }
 
     protected open fun ActionSequence.printAsJava() {
@@ -362,7 +362,7 @@ open class ActionSequence2JavaPrinter(
                 asConstant
             }
 
-            is MockSequence -> printMockSequence(this)
+            is MockList -> printMockList(this)
         }
         with(current) {
             for (statement in statements)
@@ -376,7 +376,7 @@ open class ActionSequence2JavaPrinter(
     protected open fun printReflectionList(reflectionList: ReflectionList): List<String> =
         reflectionList.flatMap { printReflectionCall(reflectionList, it) }
 
-    protected open fun printMockSequence(mockSequence: MockSequence): List<String> =
+    protected open fun printMockList(mockSequence: MockList): List<String> =
         unreachable { log.error("Mock calls are not supported in AS 2 Java printer") }
 
 
@@ -450,9 +450,10 @@ open class ActionSequence2JavaPrinter(
         is ArrayClassConstantGetter -> printArrayClassConstantGetter(owner, codeAction)
     }
 
-    private fun printMockCall(owner: MockSequence, mockCall: MockCall): List<String> = when (mockCall) {
+    private fun printMockCall(owner: MockList, mockCall: MockCall): List<String> = when (mockCall) {
         is MockNewInstance -> printMockNewInstance(owner, mockCall)
         is MockSetupMethod -> printMockSetupMethod(owner, mockCall)
+        is MockSetField    -> printMockSetField(owner, mockCall)
     }
 
     protected val <T> PrimaryValue<T>.asConstant: String
@@ -911,6 +912,9 @@ open class ActionSequence2JavaPrinter(
     protected open fun printMockSetupMethod(owner: ActionSequence, call: MockSetupMethod): List<String> =
         unreachable { log.error("Mock calls are not supported in AS 2 Java printer") }
 
+    protected open fun printMockSetField(owner: MockList, mockCall: MockSetField): List<String> =
+        unreachable { log.error("Mock calls are not supported in AS 2 Java printer") }
+
     protected open fun printUnknownSequence(sequence: UnknownSequence): List<String> {
         val actualType = sequence.target.type.asType
         return listOf(
@@ -925,5 +929,4 @@ open class ActionSequence2JavaPrinter(
             }
         )
     }
-
 }
